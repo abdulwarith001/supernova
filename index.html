@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Groq Step Agent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <div class="logo">
+          <span class="sparkle">⚡</span>
+          <h1>Groq Agent</h1>
+        </div>
+        <div class="api-config">
+          <input type="password" id="api-key" placeholder="Groq API Key" />
+          <a href="https://console.groq.com/" target="_blank" class="key-link"
+            >Get Key</a
+          >
+        </div>
+      </header>
+
+      <main id="chat-container">
+        <div id="messages">
+          <div class="message system">
+            👋 Hello! Tell me what you want to do, and I'll document the steps
+            for you.
+          </div>
+        </div>
+      </main>
+
+      <footer>
+        <div class="input-wrapper">
+          <input
+            type="text"
+            id="user-input"
+            placeholder="e.g. Read emails, make coffee..."
+          />
+          <button id="send-btn">
+            <svg viewBox="0 0 24 24" width="24" height="24">
+              <path
+                fill="currentColor"
+                d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"
+              ></path>
+            </svg>
+          </button>
+          <button id="stop-btn" style="display: none; background: #ef4444">
+            <svg viewBox="0 0 24 24" width="24" height="24">
+              <path fill="currentColor" d="M6 6h12v12H6z"></path>
+            </svg>
+          </button>
+        </div>
+      </footer>
+    </div>
+    <script type="module" src="/src/renderer.ts"></script>
+  </body>
+</html>
