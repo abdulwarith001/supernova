@@ -1,8 +1,8 @@
 {
-  "name": "bot-test",
-  "productName": "bot-test",
+  "name": "supernova",
+  "productName": "Supernova",
   "version": "1.0.0",
-  "description": "My Electron application description",
+  "description": "AI congnitive app",
   "main": ".vite/build/main.js",
   "private": true,
   "scripts": {
@@ -39,9 +39,10 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "cheerio": "^1.2.0",
+    "@types/ws": "^8.18.1",
     "electron-squirrel-startup": "^1.0.1",
     "openai": "^6.16.0",
-    "playwright": "^1.58.0"
+    "robotjs": "^0.6.0",
+    "ws": "^8.19.0"
   }
 }

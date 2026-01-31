@@ -1,24 +1,22 @@
-# Bot Test - AI Automation Agent
+# Supernova - Integrated Cognitive Agent
 
-**Bot Test** is an intelligent desktop automation tool built with Electron. It combines a custom browser controller with AI reasoning (via Groq/LLaMA) to perform complex web interactions and system tasks autonomously.
+**Supernova** is a powerful desktop automation tool that integrates a full browser experience directly into an Electron application. It uses advanced AI reasoning to perform web tasks with surgical precision, leveraging rich DOM metadata and native JavaScript execution.
 
-> [!WARNING]
-> **Experimental Status**: This project is currently in an early **Alpha** stage and is highly experimental. It contains known bugs, incomplete features, and may behave unpredictably. Use with caution!
+## 🚀 Key Features
 
-## 🚀 Features
-
-- **AI-Powered Automation**: Uses Large Language Models (LLaMA 3 via Groq) to plan and execute tasks.
-- **Custom Browser Control**: Built-in `BrowserController` using Playwright for robust web interaction (navigation, clicking, filling forms).
-- **Visual Feedback**: Includes a dedicated "Hand" window that visually mimics cursor movements and clicks.
-- **System Integration**: Capable of system-level interactions (mouse movement, keyboard typing, app management).
-- **Reasoning Visualization**: Displays the AI's thought process (Plan, Reflection, Thought) in real-time.
+- **Integrated Browser View**: A native `WebContentsView` side-by-side with the chat interface for a seamless automation experience.
+- **Rich DOM Observations**: The agent "sees" the page structure (IDs, classes, labels) automatically after every interaction.
+- **JavaScript Superpowers**: An `execute_js` tool allows the agent to solve complex interaction problems using native browser scripts.
+- **Precision Selectors**: Hardened logic that prioritizes stable CSS selectors (IDs, Data-TestIDs) over fragile text matches.
+- **Real-Time Reasoning**: Watch the agent's OODA loop (Observe, Orient, Decide, Act) as it navigates, reflects, and executes.
+- **Session Persistence**: Maintains logins and state across application restarts using native Electron sessions.
 
 ## 🛠️ Tech Stack
 
-- **Framework**: [Electron](https://www.electronjs.org/)
-- **Frontend**: [Vite](https://vitejs.dev/) + [TypeScript](https://www.typescriptlang.org/)
-- **Automation**: [Playwright](https://playwright.dev/)
-- **AI/LLM**: [Groq SDK](https://console.groq.com/) (OpenAI-compatible)
+- **Framework**: [Electron](https://www.electronjs.org/) (Native `WebContentsView`)
+- **Frontend**: [Vite](https://vitejs.dev/) + [TypeScript](https://www.typescriptlang.org/) + Vanilla CSS
+- **AI/LLM**: [OpenAI](https://openai.com/) (GPT-4o) & [Groq](https://groq.com/) (LLaMA 3)
+- **Vision**: Integrated OpenAI Vision for complex UI analysis.
 
 ## 📦 Installation
 
@@ -26,7 +24,7 @@
 
     ```bash
     git clone <repository-url>
-    cd bot-test
+    cd supernova
     ```
 
 2.  **Install dependencies**
@@ -36,31 +34,28 @@
 
 ## 🎮 Usage
 
-1.  **Start the Application**
+1.  **Environment Setup**
+    Create a `.env` file or use the in-app settings to provide your API keys:
+    - `OPENAI_API_KEY` (Required for Vision and GPT-4o)
+    - `GROQ_API_KEY` (If using LLaMA 3)
+
+2.  **Start the Application**
 
     ```bash
     npm start
     ```
 
-2.  **Configure API Key**
-    - Launch the app.
-    - Enter your [Groq API Key](https://console.groq.com/keys) in the input field at the top right.
-
 3.  **Run a Task**
-    - Type a command in the input box (e.g., "Go to Google and search for the latest tech news").
-    - Watch as the agent plans and executes the steps.
+    - Type a command (e.g., "Join the waitlist on noteiq.live").
+    - The browser view on the right will show the agent's progress in real-time.
 
 ## 📜 Scripts
 
-- `npm start`: Starts the application in development mode.
-- `npm run package`: Packages the application for distribution.
-- `npm run make`: Creates installers (zip, dmg, etc.).
-- `npm run lint`: Lints the codebase using ESLint.
+- `npm start`: Starts the development server and Electron app.
+- `npm run package`: Packages the app for production.
+- `npm run make`: Creates distribution installers.
 
-## 🤝 Contributing
+---
 
-1.  Fork the project
-2.  Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3.  Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4.  Push to the branch (`git push origin feature/AmazingFeature`)
-5.  Open a Pull Request
+> [!TIP]
+> **Pro Tip**: The agent is now trained to use `execute_js` for tricky forms. If it gets stuck, it might try to write its own selector logic in JavaScript!

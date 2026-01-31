@@ -1,216 +1,228 @@
-import OpenAI from "openai";
-import { BrowserController } from "../controllers/browser.controller";
-import { SystemController } from "../controllers/system.controller";
-import { AgentHistory, AgentResponse, AgentAction } from "../types";
-import { getSystemPrompt } from "./prompts";
+import { AgentResponse, AgentHistory, Thought } from "../types";
+import { BrainService } from "./brain.service";
+import { StateService } from "./state.service";
+import { ElectronBrowserService } from "./electron-browser.service";
+import { VisionService } from "./vision.service";
+import { getCognitiveSystemPrompt } from "./prompts";
+import fs from "fs";
+import path from "path";
 
 export class AgentService {
-  private openai: OpenAI;
-  private browser: BrowserController;
-  private system: SystemController;
+  private brain: BrainService;
+  private state: StateService;
+  private browser: ElectronBrowserService;
+  private visionService: VisionService | null = null;
 
   constructor(
     apiKey: string,
-    browser: BrowserController,
-    system: SystemController,
+    model: string = "gpt-4o",
+    openaiApiKey?: string,
+    visionMode: "off" | "auto" | "always" = "auto",
   ) {
-    this.openai = new OpenAI({
-      apiKey: apiKey,
-      baseURL: "https://api.groq.com/openai/v1",
-    });
-    this.browser = browser;
-    this.system = system;
-  }
+    this.brain = new BrainService(apiKey, undefined, model);
+    this.state = new StateService();
+    this.browser = ElectronBrowserService.getInstance();
 
-  private parseResponse(content: string): AgentAction {
-    try {
-      // 1. Clean up potential markdown fences
-      let cleaned = content
-        .replace(/```json/g, "")
-        .replace(/```/g, "")
-        .trim();
-
-      // 2. Remove comments (lines starting with # or // inside the string, but be careful with URLs)
-      // A more robust way is to remove anything after # or // if it's not inside a string
-      // For now, let's do a simple line-by-line cleanup for the most common failure: comments at the end of lines
-      cleaned = cleaned
-        .split("\n")
-        .map((line) => {
-          const commentIndex = line.indexOf(" #");
-          if (commentIndex !== -1) return line.slice(0, commentIndex).trim();
-          const slashCommentIndex = line.indexOf(" //");
-          if (slashCommentIndex !== -1)
-            return line.slice(0, slashCommentIndex).trim();
-          return line;
-        })
-        .join("\n");
-
-      return JSON.parse(cleaned);
-    } catch (e) {
-      console.error("Failed to parse agent response:", content);
-      throw new Error(
-        "AI returned invalid JSON. Content: " + content.slice(0, 100),
-      );
+    if (openaiApiKey) {
+      this.visionService = new VisionService(openaiApiKey);
     }
   }
 
-  private truncateHistory(history: AgentHistory[]) {
-    if (history.length <= 6) return history;
-    const systemMsg = history[0];
-    const recentMsgs = history.slice(-4);
-    const middleMsgs = history.slice(1, -4);
-
-    const truncatedMiddle = middleMsgs.map((msg) => {
-      if (msg.role === "user" && msg.content.startsWith("Observation:")) {
-        return {
-          ...msg,
-          content: msg.content.slice(0, 500) + "... [truncated]",
-        };
-      }
-      return msg;
-    });
-
-    return [systemMsg, ...truncatedMiddle, ...recentMsgs];
+  private loadSkills(): string {
+    try {
+      const skillsDir = path.join(process.cwd(), "skills");
+      if (!fs.existsSync(skillsDir)) return "";
+      const files = fs.readdirSync(skillsDir);
+      return files
+        .filter((f) => f.endsWith(".md"))
+        .map((f) => fs.readFileSync(path.join(skillsDir, f), "utf-8"))
+        .join("\n\n---\n\n");
+    } catch (e) {
+      console.error("Failed to load skills:", e);
+      return "";
+    }
   }
 
   async run(
     prompt: string,
-    existingHistory?: AgentHistory[],
+    history: AgentHistory[],
     onLog?: (msg: string) => void,
-    signal?: AbortSignal,
   ): Promise<AgentResponse> {
-    const history: AgentHistory[] = existingHistory || [
-      { role: "system", content: getSystemPrompt(prompt) },
-    ];
-
-    if (existingHistory && existingHistory.length > 0) {
-      history.push({ role: "user", content: prompt });
-    }
-
     const sendLog = (msg: string) => onLog && onLog(msg);
 
-    for (let i = 0; i < 10; i++) {
-      if (signal?.aborted) {
-        sendLog("🛑 Task stopped by user.");
-        return { results: ["Task cancelled by user."], history };
+    // 1. Observe (Update State and get initial browser context)
+    this.state.updateHistory({ role: "user", content: prompt });
+
+    let initialObservation = "";
+    try {
+      const snapshot = await this.browser.getSnapshot();
+      if (snapshot.url && snapshot.url !== "about:blank") {
+        initialObservation = await this.browser.formatObservation(
+          "Initial Browser State",
+        );
       }
-      try {
-        const truncatedHistory = this.truncateHistory(history);
-        const completion = await this.openai.chat.completions.create({
-          messages: truncatedHistory as any,
-          model: "llama-3.1-8b-instant",
-          response_format: { type: "json_object" },
-        });
+    } catch (e) {
+      console.error("Initial observation failed:", e);
+    }
 
-        if (!completion.choices || completion.choices.length === 0) {
-          throw new Error("AI returned an empty response.");
-        }
+    if (initialObservation) {
+      this.state.updateHistory({ role: "user", content: initialObservation });
+    }
 
-        const content = completion.choices[0].message.content!;
-        history.push({ role: "assistant", content });
+    sendLog(`🧠 Thinking...`);
 
-        const action = this.parseResponse(content);
+    let turns = 0;
+    const maxTurns = 10; // OODA Loop Limit
 
-        if (action.reasoning) {
-          sendLog(
-            JSON.stringify({ type: "reasoning", data: action.reasoning }),
-          );
-        } else {
-          sendLog(`🧠 Thinking...`);
-        }
+    while (turns < maxTurns) {
+      turns++;
 
-        if (action.tool === "ask_user") {
-          return { question: action.args[0], history };
-        }
+      // 2. Orient & Decide (Brain)
+      const context = {
+        history: this.state.getHistory(),
+        workingMemory: this.state.getWorkingMemory(),
+        skills: "", // Load skills if needed
+        systemPrompt: getCognitiveSystemPrompt(this.loadSkills()),
+        profile: this.state.getProfile(),
+      };
 
-        if (action.tool === "finish") {
-          return { results: [action.args[0]], history: [] };
-        }
+      const thought: Thought = await this.brain.think(context);
 
-        sendLog(`🔧 Executing ${action.tool}...`);
+      // Log reasoning
+      if (thought.reasoning) {
+        sendLog(`💭 ${thought.reasoning}`);
+      }
+
+      // 3. Act
+      if (thought.error) {
+        sendLog(`❌ Error: ${thought.error}`);
+        return { reply: thought.reply || "I encountered an error." };
+      }
+
+      if (thought.reply) {
+        this.state.updateHistory({ role: "assistant", content: thought.reply });
+        return { reply: thought.reply };
+      }
+
+      if (thought.action) {
+        const action = thought.action;
+        sendLog(
+          `⚡ Action: ${action.name} (${JSON.stringify(action.arguments)})`,
+        );
+
+        // Execute Tool
         let result = "";
-
-        switch (action.tool) {
-          case "navigate":
-            result = await this.browser.navigate(action.args[0]);
-            break;
-          case "search_web":
-            result = await this.browser.searchWeb(action.args[0]);
-            break;
-          case "get_interactive_elements":
-            result = await this.browser.getInteractiveElements();
-            break;
-          case "click_by_index":
-            result = await this.browser.clickByIndex(Number(action.args[0]));
-            break;
-          case "click":
-            result = await this.browser.click(action.args[0]);
-            break;
-          case "fill":
-            result = await this.browser.fill(action.args[0], action.args[1]);
-            break;
-          case "get_page_content":
-            result = await this.browser.getPageContent();
-            break;
-          case "scroll":
-            result = await this.browser.scroll(action.args[0]);
-            break;
-          case "get_system_state":
-            result = await this.system.getSystemState();
-            break;
-          case "mouse_move":
-            result = await this.system.mouseMove(
-              Number(action.args[0]),
-              Number(action.args[1]),
-            );
-            break;
-          case "mouse_click":
-            result = await this.system.mouseClick(
-              Number(action.args[0]),
-              Number(action.args[1]),
-            );
-            break;
-          case "keyboard_type":
-            result = await this.system.keyboardType(action.args[0]);
-            break;
-          case "list_apps":
-            result = await this.system.listApps();
-            break;
-          case "open_app":
-            result = await this.system.openApp(action.args[0]);
-            break;
-          case "run_applescript":
-            result = await this.system.runAppleScript(action.args[0]);
-            break;
-          case "wait":
-            result = await this.system.wait(Number(action.args[0]));
-            break;
-          case "say":
-            sendLog(`💬 AI: ${action.args[0]}`);
-            result = `Sent message to user: ${action.args[0]}`;
-            break;
-          default:
-            result = `Unknown tool: ${action.tool}`;
+        try {
+          result = await this.executeTool(action, sendLog);
+        } catch (e: any) {
+          result = `Error executing tool: ${e.message}`;
         }
 
-        sendLog(`👁 Observed: ${result.slice(0, 150)}...`);
-        history.push({ role: "user", content: `Observation: ${result}` });
-      } catch (error) {
-        if (error.status === 429) {
-          sendLog("⚠️ Rate limit reached. Waiting 10 seconds...");
-          await new Promise((r) => setTimeout(r, 10000));
-          i--; // Don't count this as a step
-          continue;
-        }
-        const errorMsg = `Error: ${error.message}`;
-        sendLog(`⚠️ ${errorMsg}`);
-        history.push({ role: "user", content: `Observation: ${errorMsg}` });
+        this.state.updateHistory({
+          role: "assistant",
+          content: `Executing ${action.name}...`,
+        });
+        this.state.updateHistory({
+          role: "user",
+          content: `Observation: ${result}`,
+        });
       }
     }
 
-    return {
-      results: ["Agent reached max steps. You can type 'continue' to proceed."],
-      history,
-    };
+    return { reply: "I'm tired. I reached my turn limit." };
+  }
+
+  private async executeTool(
+    action: any,
+    sendLog: (msg: string) => void,
+  ): Promise<string> {
+    const { name, arguments: args } = action;
+
+    if (name === "search_web") {
+      const url = `https://www.bing.com/search?q=${encodeURIComponent(args.query)}`;
+      return await this.browser.goto(url);
+    }
+
+    if (name === "visit_page") {
+      return await this.browser.goto(args.url);
+    }
+
+    if (name === "check_current_page") {
+      return await this.browser.formatObservation(
+        `Current page status checked.`,
+      );
+    }
+
+    if (name === "click_element") {
+      const result = await this.browser.click(args.selector);
+      return result;
+    }
+
+    if (name === "type_in_input") {
+      const result = await this.browser.type(args.selector, args.text);
+      return result;
+    }
+
+    if (name === "scroll_page") {
+      const result = await this.browser.scroll(
+        args.direction || "down",
+        args.amount || 500,
+      );
+      return result;
+    }
+
+    if (name === "execute_js") {
+      const result = await this.browser.executeJS(args.script);
+      return result;
+    }
+
+    if (name === "remember_fact") {
+      const mem = this.state
+        .getMemoryService()
+        .addMemory(args.category, args.fact, args.description, args.tags);
+      return `Fact remembered: ${mem.fact} (ID: ${mem.id})`;
+    }
+
+    if (name === "search_memory") {
+      const results = this.state.getMemoryService().searchMemories(args.query);
+      return `Found ${results.length} memories:\n${JSON.stringify(results.slice(0, 5), null, 2)}`;
+    }
+
+    if (name === "list_memories") {
+      const results = this.state.getMemoryService().listMemories(args.category);
+      return `Memories (${args.category || "all"}):\n${JSON.stringify(results.slice(0, 10), null, 2)}`;
+    }
+
+    if (name === "take_screenshot") {
+      const screenshot = await this.browser.screenshot();
+      return `Screenshot captured. (Base64 data omitted for brevity)`;
+    }
+
+    if (name === "use_vision" || name === "analyze_page") {
+      if (!this.visionService)
+        return "Vision service not available (missing OpenAI key).";
+
+      if (name === "analyze_page" && args.url) {
+        await this.browser.goto(args.url);
+      }
+
+      const screenshot = await this.browser.screenshot();
+      const goal = args.goal || "Describe this page.";
+
+      sendLog(`🔍 Analyzing page state...`);
+
+      const analysis = await this.visionService.analyzeScreenshot(
+        screenshot,
+        goal,
+        {
+          url: "current", // TODO: Get actual URL
+          previousActions: [],
+        },
+      );
+
+      return `Vision Analysis:\n${JSON.stringify(analysis, null, 2)}`;
+    }
+
+    return "Unknown tool.";
   }
 }

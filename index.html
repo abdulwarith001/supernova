@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Groq Step Agent</title>
+    <title>Supernova</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -15,12 +15,52 @@
     <div id="app">
       <header>
         <div class="logo">
-          <span class="sparkle">⚡</span>
-          <h1>Groq Agent</h1>
+          <span class="sparkle">🧠</span>
+          <h1>Supernova</h1>
+          <div
+            id="extension-status"
+            class="status-badge disconnect"
+            title="Extension Connection Status"
+          >
+            <span>●</span> Extension
+          </div>
         </div>
         <div class="api-config">
-          <input type="password" id="api-key" placeholder="Groq API Key" />
-          <a href="https://console.groq.com/" target="_blank" class="key-link"
+          <select id="provider-select" style="display: none">
+            <option value="openai">OpenAI</option>
+          </select>
+          <select
+            id="model-select"
+            style="
+              margin-right: 8px;
+              padding: 8px;
+              border-radius: 6px;
+              border: 1px solid #e2e8f0;
+            "
+          ></select>
+          <input type="password" id="api-key" placeholder="OpenAI Key" />
+
+          <!-- Hidden inputs for legacy compatibility if needed, or cleanup -->
+          <input type="password" id="openai-key" style="display: none" />
+          <select
+            id="vision-select"
+            style="
+              margin-left: 4px;
+              padding: 8px;
+              border-radius: 6px;
+              border: 1px solid #e2e8f0;
+              font-size: 12px;
+            "
+          >
+            <option value="auto">👁️ Vision: Auto</option>
+            <option value="always">👁️ Vision: Always</option>
+            <option value="off">❌ Vision: Off</option>
+          </select>
+          <a
+            href="https://platform.openai.com/api-keys"
+            target="_blank"
+            id="key-link"
+            class="key-link"
             >Get Key</a
           >
         </div>

@@ -1,0 +1,476 @@
+[
+  {
+    "name": "browse",
+    "description": "Perform a one-shot web search and scrape the top result. Use this for quickly answering questions that require current web data without multiple turns.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The search query."
+        }
+      },
+      "required": ["query"]
+    }
+  },
+  {
+    "name": "search_web",
+    "description": "Search the internet for information using Bing Search. Use this to find answers to questions, research topics, or find current events.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The search query."
+        }
+      },
+      "required": ["query"]
+    }
+  },
+  {
+    "name": "visit_page",
+    "description": "Visit a specific URL and extract its text content. Use this to read articles, documentation, or other web pages found via search.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "The URL to visit."
+        }
+      },
+      "required": ["url"]
+    }
+  },
+  {
+    "name": "click_element",
+    "description": "Click on a specific element or text on the current page. Moves the cursor naturally and performs a click.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "selector": {
+          "type": "string",
+          "description": "The text content or CSS selector of the element to click."
+        }
+      },
+      "required": ["selector"]
+    }
+  },
+  {
+    "name": "type_in_input",
+    "description": "Type text into a specific input or textarea on the current page. Moves the cursor, clicks, and then types.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "selector": {
+          "type": "string",
+          "description": "The CSS selector or index (number) of the input to type into."
+        },
+        "text": {
+          "type": "string",
+          "description": "The text to type."
+        }
+      },
+      "required": ["selector", "text"]
+    }
+  },
+  {
+    "name": "scroll_page",
+    "description": "Scroll the current page up or down.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "direction": {
+          "type": "string",
+          "enum": ["up", "down"],
+          "description": "The direction to scroll."
+        },
+        "amount": {
+          "type": "integer",
+          "description": "The amount to scroll in pixels (default: 500)."
+        }
+      }
+    }
+  },
+  {
+    "name": "take_screenshot",
+    "description": "Capture a screenshot of the current browser page. Use this to observe the visual state of the page.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "analyze_page",
+    "description": "Navigate to a URL and perform a visual analysis of the page content. Returns a summary of what's visible. Use this ONLY when text-based extraction (visit_page) is insufficient or when you need a high-level visual overview.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "The URL to visit and analyze."
+        },
+        "goal": {
+          "type": "string",
+          "description": "What information you're looking for on this page."
+        }
+      },
+      "required": ["url"]
+    }
+  },
+  {
+    "name": "use_vision",
+    "description": "Use visual analysis to determine the next action on the current page. Use this ONLY when DOM-based tools (click_element, type_in_input) fail, when you are visually stuck, or when interacting with canvas/complex UIs. Prefer visit_page for information gathering.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "goal": {
+          "type": "string",
+          "description": "What you're trying to achieve on this page."
+        }
+      },
+      "required": ["goal"]
+    }
+  },
+  {
+    "name": "check_current_page",
+    "description": "Perform a fresh observation of the current page state. Returns rich metadata about inputs, buttons, and content. Use this to verify you are on the right page before navigating or searching.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "execute_js",
+    "description": "Execute arbitrary JavaScript code in the browser context. Use this for complex DOM interactions, multi-step form filling, or when existing tools fail. You have access to the full DOM API (document.querySelector, etc.). Must return a value if you want to see the result.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "script": {
+          "type": "string",
+          "description": "The JavaScript code to execute."
+        }
+      },
+      "required": ["script"]
+    }
+  },
+  {
+    "name": "run_command",
+    "description": "Execute a shell command on the user's computer. Use this to run scripts, install packages, or perform system administration tasks. BE CAREFUL with destructive commands.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "The command line to execute."
+        }
+      },
+      "required": ["command"]
+    }
+  },
+  {
+    "name": "read_file",
+    "description": "Read the contents of a file from the local file system.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "The absolute path to the file."
+        }
+      },
+      "required": ["path"]
+    }
+  },
+  {
+    "name": "write_file",
+    "description": "Write content to a file. Can be used to create new files or overwrite existing ones.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "The absolute path to the file."
+        },
+        "content": {
+          "type": "string",
+          "description": "The content to write."
+        }
+      },
+      "required": ["path", "content"]
+    }
+  },
+  {
+    "name": "move_file",
+    "description": "Move or rename a file from a source path to a destination path.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "The current absolute path of the file."
+        },
+        "destination": {
+          "type": "string",
+          "description": "The new absolute path for the file."
+        }
+      },
+      "required": ["source", "destination"]
+    }
+  },
+  {
+    "name": "copy_file",
+    "description": "Copy a file from a source path to a destination path.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "The absolute path of the source file."
+        },
+        "destination": {
+          "type": "string",
+          "description": "The absolute path for the destination file."
+        }
+      },
+      "required": ["source", "destination"]
+    }
+  },
+  {
+    "name": "delete_file",
+    "description": "Delete a file from the local file system. USE WITH EXTREME CAUTION.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "The absolute path of the file to delete."
+        }
+      },
+      "required": ["path"]
+    }
+  },
+  {
+    "name": "make_directory",
+    "description": "Create a new directory at the specified path.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "The absolute path of the directory to create."
+        }
+      },
+      "required": ["path"]
+    }
+  },
+  {
+    "name": "list_directory",
+    "description": "List the files and subdirectories within a given directory.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "The absolute path to the directory."
+        }
+      },
+      "required": ["path"]
+    }
+  },
+  {
+    "name": "get_system_info",
+    "description": "Retrieve information about the system (OS, memory, CPU, etc.).",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "open_app",
+    "description": "Launch a desktop application by name.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "app_name": {
+          "type": "string",
+          "description": "The name of the application to open."
+        }
+      },
+      "required": ["app_name"]
+    }
+  },
+  {
+    "name": "close_app",
+    "description": "Close a running application by name.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "app_name": {
+          "type": "string",
+          "description": "The name of the application to close."
+        }
+      },
+      "required": ["app_name"]
+    }
+  },
+  {
+    "name": "get_clipboard_content",
+    "description": "Read the current content of the system clipboard.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "set_clipboard_content",
+    "description": "Set the content of the system clipboard.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "The text to copy to the clipboard."
+        }
+      },
+      "required": ["content"]
+    }
+  },
+  {
+    "name": "set_volume",
+    "description": "Set the system volume level.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Volume level from 0 to 100."
+        }
+      },
+      "required": ["level"]
+    }
+  },
+  {
+    "name": "get_battery_status",
+    "description": "Get the current battery level and charging status.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "send_notification",
+    "description": "Display a desktop notification.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Notification title."
+        },
+        "message": {
+          "type": "string",
+          "description": "Notification message body."
+        }
+      },
+      "required": ["title", "message"]
+    }
+  },
+  {
+    "name": "get_current_time",
+    "description": "Get the current local date and time.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "calculate",
+    "description": "Perform a mathematical calculation.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "expression": {
+          "type": "string",
+          "description": "The mathematical expression to evaluate (e.g., '2 + 2', 'sqrt(16)')."
+        }
+      },
+      "required": ["expression"]
+    }
+  },
+  {
+    "name": "manage_calendar",
+    "description": "Manage calendar events (add, list, delete).",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": ["add", "list", "delete"],
+          "description": "The action to perform."
+        },
+        "details": {
+          "type": "string",
+          "description": "JSON string containing event details (title, time) or query parameters."
+        }
+      },
+      "required": ["action"]
+    }
+  },
+  {
+    "name": "remember_fact",
+    "description": "Save a fact or user preference to long-term memory. Use this when the user shares something important you should remember (e.g., 'My name is Alice', 'I use Python', 'My API key is...').",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "category": {
+          "type": "string",
+          "enum": ["identity", "preferences", "task", "general", "self"],
+          "description": "Category of the fact (e.g., 'identity', 'preferences', 'self')."
+        },
+        "fact": {
+          "type": "string",
+          "description": "The specific information to remember."
+        },
+        "description": {
+          "type": "string",
+          "description": "Short context or description of what this memory is about."
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Optional tags for easier retrieval."
+        }
+      },
+      "required": ["category", "fact", "description"]
+    }
+  },
+  {
+    "name": "search_memory",
+    "description": "Search long-term memory for specific information. Use this BEFORE answering questions that might depend on past context.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Keywords to search for."
+        }
+      },
+      "required": ["query"]
+    }
+  },
+  {
+    "name": "list_memories",
+    "description": "List all saved memories, optionally filtered by category.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "category": {
+          "type": "string",
+          "description": "Optional category to filter by."
+        }
+      }
+    }
+  }
+]
