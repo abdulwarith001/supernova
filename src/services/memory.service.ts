@@ -5,6 +5,7 @@ export interface MemoryItem {
   id: string;
   category: string;
   fact: string;
+  importance: number; // 1-10: 7+ is "Core" (Always in context)
   description: string;
   tags: string[];
   timestamp: string;
@@ -56,12 +57,14 @@ export class MemoryService {
     category: string,
     fact: string,
     description: string,
+    importance: number = 5,
     tags: string[] = [],
   ): MemoryItem {
     const memory: MemoryItem = {
       id: Math.random().toString(36).substring(7),
       category,
       fact,
+      importance,
       description,
       tags,
       timestamp: new Date().toISOString(),
@@ -70,6 +73,17 @@ export class MemoryService {
     this.memories.push(memory);
     this.saveMemories();
     return memory;
+  }
+
+  async addMemoryAsync(
+    category: string,
+    fact: string,
+    description: string,
+    importance: number = 5,
+    tags: string[] = [],
+  ): Promise<MemoryItem> {
+    const mem = this.addMemory(category, fact, description, importance, tags);
+    return mem;
   }
 
   searchMemories(query: string): MemoryItem[] {
@@ -83,6 +97,13 @@ export class MemoryService {
     );
   }
 
+  async searchMemoriesSemantic(
+    query: string,
+    limit: number = 5,
+  ): Promise<MemoryItem[]> {
+    return this.searchMemories(query).slice(0, limit);
+  }
+
   listMemories(category?: string): MemoryItem[] {
     if (category) {
       return this.memories.filter((m) => m.category === category);
@@ -90,22 +111,14 @@ export class MemoryService {
     return this.memories;
   }
 
-  getProfile(): string {
-    const identity = this.listMemories("identity")
-      .map((m) => `- ${m.fact}`)
-      .join("\n");
-    const preferences = this.listMemories("preferences")
-      .map((m) => `- ${m.fact}`)
-      .join("\n");
-    const self = this.listMemories("self")
-      .map((m) => `- ${m.fact}`)
+  getCoreContext(): string {
+    const core = this.memories
+      .filter((m) => m.importance >= 7)
+      .map((m) => `- [${m.category}] ${m.fact} (${m.description})`)
       .join("\n");
 
-    let profile = "";
-    if (identity) profile += `\n### Identity\n${identity}`;
-    if (preferences) profile += `\n### Preferences\n${preferences}`;
-    if (self) profile += `\n### Self Knowledge\n${self}`;
-
-    return profile ? profile : "No profile data yet.";
+    return core
+      ? `## USER PROFILE (CORE)\n${core}`
+      : "No core identity data yet.";
   }
 }

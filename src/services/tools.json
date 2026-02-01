@@ -1,159 +1,5 @@
 [
   {
-    "name": "browse",
-    "description": "Perform a one-shot web search and scrape the top result. Use this for quickly answering questions that require current web data without multiple turns.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string",
-          "description": "The search query."
-        }
-      },
-      "required": ["query"]
-    }
-  },
-  {
-    "name": "search_web",
-    "description": "Search the internet for information using Bing Search. Use this to find answers to questions, research topics, or find current events.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string",
-          "description": "The search query."
-        }
-      },
-      "required": ["query"]
-    }
-  },
-  {
-    "name": "visit_page",
-    "description": "Visit a specific URL and extract its text content. Use this to read articles, documentation, or other web pages found via search.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "url": {
-          "type": "string",
-          "description": "The URL to visit."
-        }
-      },
-      "required": ["url"]
-    }
-  },
-  {
-    "name": "click_element",
-    "description": "Click on a specific element or text on the current page. Moves the cursor naturally and performs a click.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "selector": {
-          "type": "string",
-          "description": "The text content or CSS selector of the element to click."
-        }
-      },
-      "required": ["selector"]
-    }
-  },
-  {
-    "name": "type_in_input",
-    "description": "Type text into a specific input or textarea on the current page. Moves the cursor, clicks, and then types.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "selector": {
-          "type": "string",
-          "description": "The CSS selector or index (number) of the input to type into."
-        },
-        "text": {
-          "type": "string",
-          "description": "The text to type."
-        }
-      },
-      "required": ["selector", "text"]
-    }
-  },
-  {
-    "name": "scroll_page",
-    "description": "Scroll the current page up or down.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "direction": {
-          "type": "string",
-          "enum": ["up", "down"],
-          "description": "The direction to scroll."
-        },
-        "amount": {
-          "type": "integer",
-          "description": "The amount to scroll in pixels (default: 500)."
-        }
-      }
-    }
-  },
-  {
-    "name": "take_screenshot",
-    "description": "Capture a screenshot of the current browser page. Use this to observe the visual state of the page.",
-    "parameters": {
-      "type": "object",
-      "properties": {}
-    }
-  },
-  {
-    "name": "analyze_page",
-    "description": "Navigate to a URL and perform a visual analysis of the page content. Returns a summary of what's visible. Use this ONLY when text-based extraction (visit_page) is insufficient or when you need a high-level visual overview.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "url": {
-          "type": "string",
-          "description": "The URL to visit and analyze."
-        },
-        "goal": {
-          "type": "string",
-          "description": "What information you're looking for on this page."
-        }
-      },
-      "required": ["url"]
-    }
-  },
-  {
-    "name": "use_vision",
-    "description": "Use visual analysis to determine the next action on the current page. Use this ONLY when DOM-based tools (click_element, type_in_input) fail, when you are visually stuck, or when interacting with canvas/complex UIs. Prefer visit_page for information gathering.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "goal": {
-          "type": "string",
-          "description": "What you're trying to achieve on this page."
-        }
-      },
-      "required": ["goal"]
-    }
-  },
-  {
-    "name": "check_current_page",
-    "description": "Perform a fresh observation of the current page state. Returns rich metadata about inputs, buttons, and content. Use this to verify you are on the right page before navigating or searching.",
-    "parameters": {
-      "type": "object",
-      "properties": {}
-    }
-  },
-  {
-    "name": "execute_js",
-    "description": "Execute arbitrary JavaScript code in the browser context. Use this for complex DOM interactions, multi-step form filling, or when existing tools fail. You have access to the full DOM API (document.querySelector, etc.). Must return a value if you want to see the result.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "script": {
-          "type": "string",
-          "description": "The JavaScript code to execute."
-        }
-      },
-      "required": ["script"]
-    }
-  },
-  {
     "name": "run_command",
     "description": "Execute a shell command on the user's computer. Use this to run scripts, install packages, or perform system administration tasks. BE CAREFUL with destructive commands.",
     "parameters": {
@@ -336,30 +182,6 @@
     }
   },
   {
-    "name": "set_volume",
-    "description": "Set the system volume level.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "level": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 100,
-          "description": "Volume level from 0 to 100."
-        }
-      },
-      "required": ["level"]
-    }
-  },
-  {
-    "name": "get_battery_status",
-    "description": "Get the current battery level and charging status.",
-    "parameters": {
-      "type": "object",
-      "properties": {}
-    }
-  },
-  {
     "name": "send_notification",
     "description": "Display a desktop notification.",
     "parameters": {
@@ -377,47 +199,7 @@
       "required": ["title", "message"]
     }
   },
-  {
-    "name": "get_current_time",
-    "description": "Get the current local date and time.",
-    "parameters": {
-      "type": "object",
-      "properties": {}
-    }
-  },
-  {
-    "name": "calculate",
-    "description": "Perform a mathematical calculation.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "expression": {
-          "type": "string",
-          "description": "The mathematical expression to evaluate (e.g., '2 + 2', 'sqrt(16)')."
-        }
-      },
-      "required": ["expression"]
-    }
-  },
-  {
-    "name": "manage_calendar",
-    "description": "Manage calendar events (add, list, delete).",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "action": {
-          "type": "string",
-          "enum": ["add", "list", "delete"],
-          "description": "The action to perform."
-        },
-        "details": {
-          "type": "string",
-          "description": "JSON string containing event details (title, time) or query parameters."
-        }
-      },
-      "required": ["action"]
-    }
-  },
+
   {
     "name": "remember_fact",
     "description": "Save a fact or user preference to long-term memory. Use this when the user shares something important you should remember (e.g., 'My name is Alice', 'I use Python', 'My API key is...').",
@@ -432,6 +214,12 @@
         "fact": {
           "type": "string",
           "description": "The specific information to remember."
+        },
+        "importance": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "description": "How critical is this? 7+ = Core identity (Always in context), 1-6 = Peripheral (Searchable)."
         },
         "description": {
           "type": "string",
@@ -471,6 +259,219 @@
           "description": "Optional category to filter by."
         }
       }
+    }
+  },
+  {
+    "name": "create_skill",
+    "description": "Create a new skill for the agent. This saves a markdown file in the skills directory that defines how the agent should handle a specific task in the future. Skill files should include triggers and specific command steps.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name of the skill (e.g., 'Search Google', 'Analyze Logs')."
+        },
+        "description": {
+          "type": "string",
+          "description": "A brief description of what the skill does."
+        },
+        "instructions": {
+          "type": "string",
+          "description": "The specific markdown content of the skill, including steps and examples."
+        },
+        "filename": {
+          "type": "string",
+          "description": "The filename to save as (e.g., 'search_google.md'). Must end in .md."
+        }
+      },
+      "required": ["name", "description", "instructions", "filename"]
+    }
+  },
+  {
+    "name": "list_calendar_events",
+    "description": "List upcoming events from Google Calendar.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "timeMin": {
+          "type": "string",
+          "description": "ISO format date string to start searching from (e.g. 2026-01-31T23:53:26Z). Defaults to now."
+        }
+      }
+    }
+  },
+  {
+    "name": "create_calendar_event",
+    "description": "Create a new event in Google Calendar.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "summary": { "type": "string", "description": "Title of the event." },
+        "description": {
+          "type": "string",
+          "description": "Description of the event."
+        },
+        "start": { "type": "string", "description": "ISO format start time." },
+        "end": { "type": "string", "description": "ISO format end time." }
+      },
+      "required": ["summary", "start", "end"]
+    }
+  },
+  {
+    "name": "search_emails",
+    "description": "Search for emails in Gmail. Returns a list of emails including 'id', 'subject', 'from', and 'snippet'. Use the 'id' to read a full email via 'read_email'. REQUIRES PRIOR USER CONFIRMATION.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": { "type": "string", "description": "Gmail search query." }
+      },
+      "required": ["query"]
+    }
+  },
+  {
+    "name": "read_email",
+    "description": "Read the full content of a specific email by ID. REQUIRES PRIOR USER CONFIRMATION. You must ask the user before reading a specific email thread.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Gmail message ID." }
+      },
+      "required": ["id"]
+    }
+  },
+  {
+    "name": "send_email",
+    "description": "Send an email via Gmail. For standard chat, this REQUIRES PRIOR USER CONFIRMATION. However, for autonomous background tasks (Smart Tasks), you ARE authorized to send results directly to the user's configured email.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "to": { "type": "string", "description": "Recipient email address." },
+        "subject": { "type": "string", "description": "Email subject." },
+        "body": { "type": "string", "description": "Email body text." }
+      },
+      "required": ["to", "subject", "body"]
+    }
+  },
+  {
+    "name": "analyze_resume",
+    "description": "Extract skills and experience from a resume file (PDF, DOCX, TXT). This helps me understand your professional background better.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute path to the resume file."
+        }
+      },
+      "required": ["path"]
+    }
+  },
+  {
+    "name": "draft_job_application",
+    "description": "Draft a hyper-tailored cover letter and application strategy for a specific job description.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "job_description": {
+          "type": "string",
+          "description": "The full text of the job description."
+        },
+        "company": { "type": "string", "description": "Company name." }
+      },
+      "required": ["job_description", "company"]
+    }
+  },
+
+  {
+    "name": "draft_social_post",
+    "description": "Draft a professional social media post (LinkedIn/Twitter) based on a topic.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "Topic or theme of the post."
+        },
+        "platform": {
+          "type": "string",
+          "description": "Platform (linkedin, twitter). Default: linkedin."
+        }
+      },
+      "required": ["topic"]
+    }
+  },
+  {
+    "name": "create_reminder",
+    "description": "Schedule a reminder or a 'Smart Task'. Use simple reminders for alerts (e.g. 'pick up laundry'). For 'Smart Tasks' (actions like 'search news', 'send email') occurring in the future, you MUST set autoExecute: true.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "The reminder message. Use a fun, engaging, and slightly 'Chaos Brain' style tone to keep the user motivated!"
+        },
+        "dueAt": {
+          "type": "string",
+          "description": "The ISO 8601 date string when the reminder should trigger (optional if 'repeat' is provided)."
+        },
+        "repeat": {
+          "type": "string",
+          "description": "Recurring schedule (daily, weekly, monthly, or a standard cron expression like '0 9 * * 1-5')."
+        },
+        "autoExecute": {
+          "type": "boolean",
+          "description": "If true, the agent will automatically execute a task when the reminder triggers."
+        },
+        "taskPrompt": {
+          "type": "string",
+          "description": "The specific task or prompt for the agent to execute if autoExecute is true (e.g., 'Get latest tech news and email them to me')."
+        }
+      },
+      "required": ["message"]
+    }
+  },
+  {
+    "name": "list_reminders",
+    "description": "List all active and recently completed reminders.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["pending", "completed"],
+          "description": "Filter by status (optional)."
+        }
+      }
+    }
+  },
+  {
+    "name": "update_reminder",
+    "description": "Update an existing reminder.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The ID of the reminder." },
+        "message": {
+          "type": "string",
+          "description": "New message (optional)."
+        },
+        "dueAt": {
+          "type": "string",
+          "description": "The ISO 8601 date string when the reminder should trigger (e.g. 2026-02-01T10:07:05.123Z)."
+        }
+      },
+      "required": ["id"]
+    }
+  },
+  {
+    "name": "delete_reminder",
+    "description": "Delete a reminder.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The ID of the reminder." }
+      },
+      "required": ["id"]
     }
   }
 ]

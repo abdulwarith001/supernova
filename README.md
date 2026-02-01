@@ -1,61 +1,111 @@
-# Supernova - Integrated Cognitive Agent
+# Supernova - The Autonomous Cognitive Engine 🚀
 
-**Supernova** is a powerful desktop automation tool that integrates a full browser experience directly into an Electron application. It uses advanced AI reasoning to perform web tasks with surgical precision, leveraging rich DOM metadata and native JavaScript execution.
+**Supernova** is a state-of-the-art autonomous agent system designed to handle complex tasks, reminders, and background missions. It features a sleek web-based dashboard and a powerful background execution engine that dispatches results directly to your inbox.
 
-## 🚀 Key Features
+## 🌟 Core Concepts
 
-- **Integrated Browser View**: A native `WebContentsView` side-by-side with the chat interface for a seamless automation experience.
-- **Rich DOM Observations**: The agent "sees" the page structure (IDs, classes, labels) automatically after every interaction.
-- **JavaScript Superpowers**: An `execute_js` tool allows the agent to solve complex interaction problems using native browser scripts.
-- **Precision Selectors**: Hardened logic that prioritizes stable CSS selectors (IDs, Data-TestIDs) over fragile text matches.
-- **Real-Time Reasoning**: Watch the agent's OODA loop (Observe, Orient, Decide, Act) as it navigates, reflects, and executes.
-- **Session Persistence**: Maintains logins and state across application restarts using native Electron sessions.
+- **Interactive Dashboard**: A modern, real-time web interface powered by Socket.IO to chat with your agent and manage tasks.
+- **Smart Tasks (Autonomous Missions)**: Scheduled or recurring tasks that go beyond simple alerts. Supernova uses an OODA-loop agent to perform actions (e.g., "Every morning, fetch tech news and email me a summary").
+- **Skills System**: Extensible capability system using Markdown-based manifests. Define new tools for the agent by simply adding `.md` files to the `skills/` directory.
+- **Persistence**: Your agent lives in the background. Reminders and workspace data survive server restarts.
 
 ## 🛠️ Tech Stack
 
-- **Framework**: [Electron](https://www.electronjs.org/) (Native `WebContentsView`)
-- **Frontend**: [Vite](https://vitejs.dev/) + [TypeScript](https://www.typescriptlang.org/) + Vanilla CSS
-- **AI/LLM**: [OpenAI](https://openai.com/) (GPT-4o) & [Groq](https://groq.com/) (LLaMA 3)
-- **Vision**: Integrated OpenAI Vision for complex UI analysis.
+- **Server**: Node.js + Express + Socket.IO (for real-time dashboard communication)
+- **Frontend**: Vite + React + Vanilla CSS (Glassmorphism & Rich Typography)
+- **AI Brain**: Google Generative AI (Gemini) or OpenAI (GPT-4o)
+- **Automation**: Custom cognitive architecture with tool-calling and long-term memory.
 
-## 📦 Installation
+## 📦 Getting Started
 
-1.  **Clone the repository**
+### 1. Installation
 
-    ```bash
-    git clone <repository-url>
-    cd supernova
-    ```
+Clone the repository and install dependencies:
 
-2.  **Install dependencies**
-    ```bash
-    npm install
-    ```
+```bash
+git clone <repository-url>
+cd supernova
+npm install
+```
+
+### 2. Shell Configuration
+
+To use the `supernova` command globally, add the following to your shell profile (`~/.zshrc` or `~/.bash_profile`):
+
+```bash
+alias supernova="node /absolute/path/to/supernova/bin/supernova.js"
+```
+
+_Run `source ~/.zshrc` to apply._
+
+### 3. Onboarding & Setup
+
+Run the interactive onboarding wizard to configure your agent:
+
+```bash
+supernova onboard
+```
+
+Alternatively, manage specific integrations:
+
+```bash
+supernova setup
+```
+
+Set the following critical keys in `supernova onboard` or `supernova keys`:
+
+- `OPENAI_API_KEY` or `GEMINI_API_KEY`: Your primary AI brain.
+- `REMINDER_EMAIL`: The inbox where autonomous summaries and alerts will be sent.
+- `SERPER_API_KEY`: Required for web-searching capabilities.
 
 ## 🎮 Usage
 
-1.  **Environment Setup**
-    Create a `.env` file or use the in-app settings to provide your API keys:
-    - `OPENAI_API_KEY` (Required for Vision and GPT-4o)
-    - `GROQ_API_KEY` (If using LLaMA 3)
+### Launch the Dashboard
 
-2.  **Start the Application**
+Start the cognitive server and open the web interface:
 
-    ```bash
-    npm start
-    ```
+```bash
+supernova dashboard
+```
 
-3.  **Run a Task**
-    - Type a command (e.g., "Join the waitlist on noteiq.live").
-    - The browser view on the right will show the agent's progress in real-time.
+Accessible at: `http://localhost:3000`
 
-## 📜 Scripts
+### Smart Task Examples
 
-- `npm start`: Starts the development server and Electron app.
-- `npm run package`: Packages the app for production.
-- `npm run make`: Creates distribution installers.
+Tell the agent to handle the future for you:
+
+- _"Remind me to pick up laundry in 2 hours."_ (Simple Alert)
+- _"Every morning at 8am, search for the latest tech news and email me the summary."_ (Autonomous Mission)
+- _"In 5 minutes, check if the website noteiq.live is up and alert me."_
+
+### Skills Management
+
+Supernova's power comes from its **Skills**. You can manage them via the CLI:
+
+- `supernova skills list`: List all installed capabilities.
+- `supernova skills info <name>`: View details of a specific skill.
+- `supernova skills add`: Add a new skill from a URL or local file.
+- `supernova skills remove <name>`: Remove a skill.
+
+## 📜 CLI Reference
+
+- `supernova onboard`: Comprehensive setup wizard.
+- `supernova dashboard`: Launch the web GUI.
+- `supernova setup`: Manage integrations (Calendar, Email, etc.).
+- `supernova keys`: View and update specific API keys.
+- `supernova mode [persona]`: Switch between agent personalities (e.g., Chaos, Butler, Pirate).
+- `supernova skills`: Manage agent capabilities.
+
+## 📂 Project Structure
+
+- `bin/`: CLI wrapper.
+- `src/cli/`: Implementation of CLI commands.
+- `src/services/`: Core logic (Brain, Scheduler, Agent, etc.).
+- `src/server/`: Express and Socket.IO server implementation.
+- `skills/`: Markdown-based skill definitions.
+- `memory/`: Persistent user and agent memory.
 
 ---
 
-> [!TIP]
-> **Pro Tip**: The agent is now trained to use `execute_js` for tricky forms. If it gets stuck, it might try to write its own selector logic in JavaScript!
+> [!IMPORTANT]
+> **Privacy First**: Background missions are executed in isolated "Task Agent" instances. They prioritize focus and security, ensuring autonomous tasks operate within their specific context.

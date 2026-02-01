@@ -18,15 +18,23 @@ export interface CognitiveContext {
   lastObservation?: string;
   systemPrompt?: string;
   profile?: string;
+  contextSummary?: string;
+  noRetries?: boolean;
 }
 
 export interface Message {
-  role: "system" | "user" | "assistant";
-  content: string;
+  role: "system" | "user" | "assistant" | "function";
+  content: string | null;
+  name?: string;
+  function_call?: {
+    name: string;
+    arguments: string;
+  };
 }
 
 export interface Memory {
   shortTerm: Message[];
   working: string; // The current "goal" or "plan"
+  summary?: string; // Summary of compressed history
   longTerm?: string[]; // Vector DB or similar (future)
 }

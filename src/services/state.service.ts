@@ -4,6 +4,7 @@ import { MemoryService } from "./memory.service";
 export class StateService {
   private memory: Memory;
   private maxHistory: number = 20;
+  private notifications: string[] = [];
   private memoryService: MemoryService;
 
   constructor() {
@@ -18,8 +19,14 @@ export class StateService {
   updateHistory(message: Message) {
     this.memory.shortTerm.push(message);
     if (this.memory.shortTerm.length > this.maxHistory) {
-      this.memory.shortTerm.shift(); // FIFO
+      // We'll let AgentService handle summarization, so we won't shift here automatically
+      // if we want to preserve the context for summarization.
+      // this.memory.shortTerm.shift();
     }
+  }
+
+  trimHistory(count: number) {
+    this.memory.shortTerm = this.memory.shortTerm.slice(count);
   }
 
   // Set the current goal/working plan
@@ -35,8 +42,26 @@ export class StateService {
     return this.memory.working;
   }
 
-  getProfile(): string {
-    return this.memoryService.getProfile();
+  updateSummary(summary: string) {
+    this.memory.summary = summary;
+  }
+
+  getSummary(): string | undefined {
+    return this.memory.summary;
+  }
+
+  addNotification(msg: string) {
+    this.notifications.push(msg);
+  }
+
+  getNotifications(): string[] {
+    const n = [...this.notifications];
+    this.notifications = []; // Clear after reading
+    return n;
+  }
+
+  getCoreContext(): string {
+    return this.memoryService.getCoreContext();
   }
 
   clear() {

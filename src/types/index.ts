@@ -24,7 +24,4 @@ export interface AgentResponse {
   proposedAction?: ProposedAction;
 }
 
-export interface AgentHistory {
-  role: "system" | "user" | "assistant";
-  content: string;
-}
+

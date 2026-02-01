@@ -6,11 +6,14 @@ _Persisting knowledge across sessions for personalized experiences._
 
 ## Quick Reference
 
-| Action        | Tool            | When to Use               |
-| ------------- | --------------- | ------------------------- |
-| Save a fact   | `remember_fact` | Learning user preferences |
-| Find facts    | `search_memory` | Before starting tasks     |
-| List category | `list_memories` | Reviewing what you know   |
+| Action        | Tool            | When to Use                           |
+| ------------- | --------------- | ------------------------------------- |
+| Save a fact   | `remember_fact` | **IMMEDIATELY** when user shares info |
+| Find facts    | `search_memory` | Before starting tasks                 |
+| List category | `list_memories` | Reviewing what you know               |
+
+> [!IMPORTANT]
+> **PROACTIVE SAVING IS MANDATORY.** Do not wait for the user to ask "did you save that?". If the user mentions a project, a preference, or a fact about themselves, invoke `remember_fact` in the SAME turn if possible, or immediately after.
 
 ---
 
