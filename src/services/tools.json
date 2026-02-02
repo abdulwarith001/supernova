@@ -402,7 +402,7 @@
   },
   {
     "name": "create_reminder",
-    "description": "Schedule a reminder or a 'Smart Task'. Use simple reminders for alerts (e.g. 'pick up laundry'). For 'Smart Tasks' (actions like 'search news', 'send email') occurring in the future, you MUST set autoExecute: true.",
+    "description": "Schedule a reminder or an 'Autonomous Action' (Smart Task). Use this for both simple alerts (e.g. 'buy milk') and complex future actions (e.g. 'search news every morning', 'email report in 1 hour'). If the reminder is an action I should perform myself, you MUST set autoExecute: true.",
     "parameters": {
       "type": "object",
       "properties": {

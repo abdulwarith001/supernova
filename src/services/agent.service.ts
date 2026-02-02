@@ -123,6 +123,12 @@ export class AgentService {
     }
   }
 
+  public destroy() {
+    console.log("🛑 Destroying AgentService instance...");
+    this.scheduler.destroy();
+    this.watcher.stopAll();
+  }
+
   public getApiKey(): string {
     return this.brain.getApiKey();
   }
@@ -642,18 +648,30 @@ Format: Return ONLY the post text. No "Here is the post" preamble.`;
         let cronExpression = args.repeat;
         if (cronExpression) {
           const lower = cronExpression.toLowerCase();
-          if (lower.includes("minute")) cronExpression = "* * * * *";
-          else if (lower.includes("hour")) cronExpression = "0 * * * *";
-          else if (lower.includes("daily") || lower.includes("day"))
+          // Handle "every X minutes"
+          const minuteMatch = lower.match(/every (\d+) minutes?/);
+          const hourMatch = lower.match(/every (\d+) hours?/);
+
+          if (minuteMatch) {
+            cronExpression = `*/${minuteMatch[1]} * * * *`;
+          } else if (hourMatch) {
+            cronExpression = `0 */${hourMatch[1]} * * *`;
+          } else if (lower.includes("minute")) {
+            cronExpression = "* * * * *";
+          } else if (lower.includes("hour")) {
+            cronExpression = "0 * * * *";
+          } else if (lower.includes("daily") || lower.includes("day")) {
             cronExpression = "0 9 * * *";
-          else if (lower.includes("weekly") || lower.includes("week"))
+          } else if (lower.includes("weekly") || lower.includes("week")) {
             cronExpression = "0 9 * * 1";
+          }
         }
 
         // SMART DETECTION: If the message looks like an action, force autoExecute
         let autoExecute = args.autoExecute;
         let taskPrompt = args.taskPrompt;
         const msg = args.message.toLowerCase();
+        // Expanded action keywords
         const actionKeywords = [
           "fetch",
           "get",
@@ -664,9 +682,18 @@ Format: Return ONLY the post text. No "Here is the post" preamble.`;
           "email",
           "news",
           "update",
+          "find",
+          "notify",
+          "tell",
+          "browse",
+          "scan",
+          "analyze",
         ];
 
-        if (!autoExecute && actionKeywords.some((k) => msg.includes(k))) {
+        if (
+          !autoExecute &&
+          (actionKeywords.some((k) => msg.includes(k)) || taskPrompt)
+        ) {
           console.log(
             `🤖 Smart Discovery: Treating "${args.message}" as an Autonomous Task.`,
           );

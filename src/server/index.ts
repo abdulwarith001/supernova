@@ -53,6 +53,9 @@ const initAgentOnStart = () => {
           apiKey = decrypt(apiKey);
         } catch (e) {}
         console.log("🚀 Initializing Background Agent...");
+        if (agentInstance) {
+          agentInstance.destroy();
+        }
         agentInstance = new AgentService(
           apiKey,
           config.SELECTED_MODEL || "gpt-4o",
@@ -81,17 +84,17 @@ const broadcastReminder = async (job: Job) => {
       );
 
       const notificationEmail = agentInstance.getNotificationEmail();
-      if (!notificationEmail) {
-        console.warn(
-          "⚠️ Silent Fail: No notification email configured. Aborting background task to prevent hallucination.",
-        );
-        return;
+      if (notificationEmail) {
+        taskAgent.setNotificationEmail(notificationEmail);
       }
 
-      taskAgent.setNotificationEmail(notificationEmail);
-
       // We combine the task and the delivery intent into ONE single execution
-      const fullPrompt = `TASK: ${job.taskPrompt}\n\nIMPORTANT: Once finished, summarize findings and email them specifically to ${notificationEmail}. Do NOT use any other email address.`;
+      // We are now explicitly ENFORCING exclusivity
+      const emailDirective = notificationEmail
+        ? `Once finished, send the summary to ONLY ONE recipient. If the TASK specifies an email address, email ONLY that address. If NO email is in the task, use ${notificationEmail} as the fallback.`
+        : "Once finished, summarize findings and email them ONLY to the recipient specified in the TASK. If no email is provided in the task, just log to console.";
+
+      const fullPrompt = `TASK: ${job.taskPrompt}\n\nIMPORTANT: ${emailDirective}`;
 
       await taskAgent.executeAutonomousTask(fullPrompt, (msg: string) => {
         console.log(`[Background Agent] ${msg}`);
@@ -217,6 +220,9 @@ io.on("connection", (socket: any) => {
 
     if (!agentInstance || lastApiKey !== apiKey) {
       console.log("Creating new AgentService instance...");
+      if (agentInstance) {
+        agentInstance.destroy();
+      }
       agentInstance = new AgentService(apiKey || "", model, broadcastReminder);
       lastApiKey = apiKey || "";
     }

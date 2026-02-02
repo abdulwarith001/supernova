@@ -24,8 +24,8 @@ export class TaskAgent extends AgentService {
     // We run the agent without a chat history for a fresh execution context
     // and use a specialized system instruction modifier if needed.
     const emailInfo = this.notificationEmail
-      ? `CRITICAL: The user's notification email is: ${this.notificationEmail}. You MUST use ONLY this address for any 'send_email' calls. Never hallucinate or use example addresses like 'recipient@example.com'.`
-      : "No notification email is configured for the user. Deliver results via terminal only.";
+      ? `NOTE: The user's default email is: ${this.notificationEmail}. If the user explicitly specifies a DIFFERENT recipient in their task prompt, you MUST email ONLY that specific recipient. Do NOT send to both. Use the default email ONLY as a fallback if no recipient is mentioned.`
+      : "No default email configured. You MUST extract a recipient from the task prompt to send any emails.";
 
     const systemModifier = `
 Execute this task autonomously as a background sub-agent.

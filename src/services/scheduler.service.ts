@@ -24,6 +24,7 @@ export class SchedulerService {
   private config: any = {};
 
   private onReminder?: (job: Job) => void;
+  private cleanupTask?: cron.ScheduledTask;
 
   constructor(
     workspaceDir: string,
@@ -37,7 +38,7 @@ export class SchedulerService {
     this.loadJobs();
 
     // Start Cleanup Task (Runs every hour)
-    cron.schedule("0 * * * *", () => this.cleanup());
+    this.cleanupTask = cron.schedule("0 * * * *", () => this.cleanup());
   }
 
   private loadConfig() {
@@ -256,6 +257,18 @@ export class SchedulerService {
       }
     } catch (e) {
       console.error("Failed to execute reminder action:", e);
+    }
+  }
+
+  public destroy() {
+    console.log("🛑 Stopping SchedulerService...");
+    // Stop all active reminder tasks
+    this.tasks.forEach((task) => task.stop());
+    this.tasks.clear();
+
+    // Stop cleanup task
+    if (this.cleanupTask) {
+      this.cleanupTask.stop();
     }
   }
 
