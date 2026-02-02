@@ -35,7 +35,11 @@ export class BrainService {
       },
       ...context.history.map((m) => {
         const content =
-          typeof m.content === "string" ? m.content : JSON.stringify(m.content);
+          m.content === null
+            ? null
+            : typeof m.content === "string"
+              ? m.content
+              : JSON.stringify(m.content);
         const msg: any = { role: m.role, content };
         if (m.role === "function" || m.name) {
           msg.name = (m.name || "unknown_function").replace(
@@ -61,11 +65,13 @@ export class BrainService {
       });
     }
 
-    // Inject Context Summary (if available)
-    if (context.contextSummary) {
-      messages.splice(context.profile ? 2 : 1, 0, {
-        role: "system",
-        content: `# CONVERSATION SUMMARY (PAST CONTEXT)\n${context.contextSummary}`,
+    // Inject Context Fragments (Tiered Injection)
+    if (context.fragments) {
+      context.fragments.forEach((fragment, index) => {
+        messages.splice(1 + index, 0, {
+          role: "system",
+          content: fragment,
+        });
       });
     }
 
@@ -190,7 +196,11 @@ export class BrainService {
           {
             role: "system",
             content:
-              "You are a master of conciseness. Your job is to summarize the following conversation history into a single, highly dense paragraph that captures all key decisions, facts, and the current state of the conversation. Focus on WHAT was done and WHAT the current goals are.",
+              "You are a master of conciseness and context prioritization. Summarize the conversation into a single, highly dense paragraph. \n\n" +
+              "**STRICT RULES**:\n" +
+              "1. **Prune Stale Topics**: If a topic (e.g., questions about celebrities, past searches) is resolved or no longer the focus, omit it or condense it to a single word.\n" +
+              "2. **Highlight Key Facts**: Focus on user details (name, preferences), agent identity, and current pending goals.\n" +
+              "3. **State of Being**: Clearly state what has been done and what the current immediate task is.",
           },
           ...messages.map((m) => {
             const msg: any = { role: m.role, content: m.content };

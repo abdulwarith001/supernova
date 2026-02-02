@@ -40,6 +40,10 @@
         "content": {
           "type": "string",
           "description": "The content to write."
+        },
+        "append": {
+          "type": "boolean",
+          "description": "If true, append the content to the existing file instead of overwriting it."
         }
       },
       "required": ["path", "content"]
@@ -75,7 +79,7 @@
         },
         "destination": {
           "type": "string",
-          "description": "The absolute path for the destination file."
+          "description": "The new absolute path for the destination file."
         }
       },
       "required": ["source", "destination"]
@@ -199,68 +203,6 @@
       "required": ["title", "message"]
     }
   },
-
-  {
-    "name": "remember_fact",
-    "description": "Save a fact or user preference to long-term memory. Use this when the user shares something important you should remember (e.g., 'My name is Alice', 'I use Python', 'My API key is...').",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "category": {
-          "type": "string",
-          "enum": ["identity", "preferences", "task", "general", "self"],
-          "description": "Category of the fact (e.g., 'identity', 'preferences', 'self')."
-        },
-        "fact": {
-          "type": "string",
-          "description": "The specific information to remember."
-        },
-        "importance": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 10,
-          "description": "How critical is this? 7+ = Core identity (Always in context), 1-6 = Peripheral (Searchable)."
-        },
-        "description": {
-          "type": "string",
-          "description": "Short context or description of what this memory is about."
-        },
-        "tags": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Optional tags for easier retrieval."
-        }
-      },
-      "required": ["category", "fact", "description"]
-    }
-  },
-  {
-    "name": "search_memory",
-    "description": "Search long-term memory for specific information. Use this BEFORE answering questions that might depend on past context.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string",
-          "description": "Keywords to search for."
-        }
-      },
-      "required": ["query"]
-    }
-  },
-  {
-    "name": "list_memories",
-    "description": "List all saved memories, optionally filtered by category.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "category": {
-          "type": "string",
-          "description": "Optional category to filter by."
-        }
-      }
-    }
-  },
   {
     "name": "create_skill",
     "description": "Create a new skill for the agent. This saves a markdown file in the skills directory that defines how the agent should handle a specific task in the future. Skill files should include triggers and specific command steps.",
@@ -288,190 +230,39 @@
     }
   },
   {
-    "name": "list_calendar_events",
-    "description": "List upcoming events from Google Calendar.",
+    "name": "get_skill_details",
+    "description": "Fetch the full instructions and implementation details for a specific skill. Use this when you need to perform a task that matches a skill's description but you don't have the full instructions in your current context.",
     "parameters": {
       "type": "object",
       "properties": {
-        "timeMin": {
+        "skill_name": {
           "type": "string",
-          "description": "ISO format date string to start searching from (e.g. 2026-01-31T23:53:26Z). Defaults to now."
-        }
-      }
-    }
-  },
-  {
-    "name": "create_calendar_event",
-    "description": "Create a new event in Google Calendar.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "summary": { "type": "string", "description": "Title of the event." },
-        "description": {
-          "type": "string",
-          "description": "Description of the event."
-        },
-        "start": { "type": "string", "description": "ISO format start time." },
-        "end": { "type": "string", "description": "ISO format end time." }
-      },
-      "required": ["summary", "start", "end"]
-    }
-  },
-  {
-    "name": "search_emails",
-    "description": "Search for emails in Gmail. Returns a list of emails including 'id', 'subject', 'from', and 'snippet'. Use the 'id' to read a full email via 'read_email'. REQUIRES PRIOR USER CONFIRMATION.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": { "type": "string", "description": "Gmail search query." }
-      },
-      "required": ["query"]
-    }
-  },
-  {
-    "name": "read_email",
-    "description": "Read the full content of a specific email by ID. REQUIRES PRIOR USER CONFIRMATION. You must ask the user before reading a specific email thread.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "id": { "type": "string", "description": "Gmail message ID." }
-      },
-      "required": ["id"]
-    }
-  },
-  {
-    "name": "send_email",
-    "description": "Send an email via Gmail. For standard chat, this REQUIRES PRIOR USER CONFIRMATION. However, for autonomous background tasks (Smart Tasks), you ARE authorized to send results directly to the user's configured email.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "to": { "type": "string", "description": "Recipient email address." },
-        "subject": { "type": "string", "description": "Email subject." },
-        "body": { "type": "string", "description": "Email body text." }
-      },
-      "required": ["to", "subject", "body"]
-    }
-  },
-  {
-    "name": "analyze_resume",
-    "description": "Extract skills and experience from a resume file (PDF, DOCX, TXT). This helps me understand your professional background better.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "path": {
-          "type": "string",
-          "description": "Absolute path to the resume file."
+          "description": "The name of the skill folder (e.g., 'web_search', 'email')."
         }
       },
-      "required": ["path"]
+      "required": ["skill_name"]
     }
   },
   {
-    "name": "draft_job_application",
-    "description": "Draft a hyper-tailored cover letter and application strategy for a specific job description.",
+    "name": "update_config",
+    "description": "Update the agent's configuration or save a secret (like an API key). Secrets will be encrypted. The updated value is available immediately in the environment.",
     "parameters": {
       "type": "object",
       "properties": {
-        "job_description": {
+        "key": {
           "type": "string",
-          "description": "The full text of the job description."
+          "description": "The configuration key (e.g., 'SERPER_API_KEY', 'DEFAULT_MODEL')."
         },
-        "company": { "type": "string", "description": "Company name." }
-      },
-      "required": ["job_description", "company"]
-    }
-  },
-
-  {
-    "name": "draft_social_post",
-    "description": "Draft a professional social media post (LinkedIn/Twitter) based on a topic.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "topic": {
+        "value": {
           "type": "string",
-          "description": "Topic or theme of the post."
+          "description": "The value to save."
         },
-        "platform": {
-          "type": "string",
-          "description": "Platform (linkedin, twitter). Default: linkedin."
-        }
-      },
-      "required": ["topic"]
-    }
-  },
-  {
-    "name": "create_reminder",
-    "description": "Schedule a reminder or an 'Autonomous Action' (Smart Task). Use this for both simple alerts (e.g. 'buy milk') and complex future actions (e.g. 'search news every morning', 'email report in 1 hour'). If the reminder is an action I should perform myself, you MUST set autoExecute: true.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "message": {
-          "type": "string",
-          "description": "The reminder message. Use a fun, engaging, and slightly 'Chaos Brain' style tone to keep the user motivated!"
-        },
-        "dueAt": {
-          "type": "string",
-          "description": "The ISO 8601 date string when the reminder should trigger (optional if 'repeat' is provided)."
-        },
-        "repeat": {
-          "type": "string",
-          "description": "Recurring schedule (daily, weekly, monthly, or a standard cron expression like '0 9 * * 1-5')."
-        },
-        "autoExecute": {
+        "isSecret": {
           "type": "boolean",
-          "description": "If true, the agent will automatically execute a task when the reminder triggers."
-        },
-        "taskPrompt": {
-          "type": "string",
-          "description": "The specific task or prompt for the agent to execute if autoExecute is true (e.g., 'Get latest tech news and email them to me')."
+          "description": "Whether to encrypt the value before saving."
         }
       },
-      "required": ["message"]
-    }
-  },
-  {
-    "name": "list_reminders",
-    "description": "List all active and recently completed reminders.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "status": {
-          "type": "string",
-          "enum": ["pending", "completed"],
-          "description": "Filter by status (optional)."
-        }
-      }
-    }
-  },
-  {
-    "name": "update_reminder",
-    "description": "Update an existing reminder.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "id": { "type": "string", "description": "The ID of the reminder." },
-        "message": {
-          "type": "string",
-          "description": "New message (optional)."
-        },
-        "dueAt": {
-          "type": "string",
-          "description": "The ISO 8601 date string when the reminder should trigger (e.g. 2026-02-01T10:07:05.123Z)."
-        }
-      },
-      "required": ["id"]
-    }
-  },
-  {
-    "name": "delete_reminder",
-    "description": "Delete a reminder.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "id": { "type": "string", "description": "The ID of the reminder." }
-      },
-      "required": ["id"]
+      "required": ["key", "value", "isSecret"]
     }
   }
 ]

@@ -19,6 +19,7 @@ export interface CognitiveContext {
   systemPrompt?: string;
   profile?: string;
   contextSummary?: string;
+  fragments?: string[];
   noRetries?: boolean;
 }
 

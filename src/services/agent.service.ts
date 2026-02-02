@@ -13,8 +13,9 @@ import { exec } from "child_process";
 import util from "util";
 import clipboardy from "clipboardy";
 import notifier from "node-notifier";
-import { decrypt } from "../utils/crypto";
+import { decrypt, encrypt } from "../utils/crypto";
 import { parseSkillManifest } from "../utils/parser";
+import { ContextService } from "./context.service";
 const execPromise = util.promisify(exec);
 
 export class AgentService {
@@ -27,6 +28,7 @@ export class AgentService {
   private google: GoogleService;
   private resume: ResumeService;
   public scheduler: SchedulerService;
+  private contextManager: ContextService;
 
   constructor(
     apiKey: string,
@@ -44,6 +46,66 @@ export class AgentService {
       }
     }
 
+    // 1.1 Initialize Memory Files (BOOTSTRAP, IDENTITY, USER, SOUL)
+    const memoryDir = path.join(this.workspaceDir, "memory");
+    const userDir = path.join(memoryDir, "user");
+    const agentDir = path.join(memoryDir, "agent");
+    const identityPath = path.join(agentDir, "IDENTITY.md");
+    const userPath = path.join(userDir, "USER.md");
+    const soulPath = path.join(agentDir, "SOUL.md");
+    const mindPath = path.join(agentDir, "MIND.md");
+    const bootstrapPath = path.join(agentDir, "BOOTSTRAP.md");
+
+    if (!fs.existsSync(memoryDir)) fs.mkdirSync(memoryDir, { recursive: true });
+    if (!fs.existsSync(userDir)) fs.mkdirSync(userDir, { recursive: true });
+    if (!fs.existsSync(agentDir)) fs.mkdirSync(agentDir, { recursive: true });
+
+    // MIGRATION: Move old root files to /agent/
+    const oldRootPaths = {
+      "IDENTITY.md": path.join(memoryDir, "IDENTITY.md"),
+      "SOUL.md": path.join(memoryDir, "SOUL.md"),
+      "BOOTSTRAP.md": path.join(memoryDir, "BOOTSTRAP.md"),
+    };
+
+    for (const [name, oldPath] of Object.entries(oldRootPaths)) {
+      const newPath = path.join(agentDir, name);
+      if (fs.existsSync(oldPath) && !fs.existsSync(newPath)) {
+        try {
+          fs.renameSync(oldPath, newPath);
+          console.log(`Migrated ${name} to: ${newPath}`);
+        } catch (e) {
+          console.error(`Failed to migrate ${name}:`, e);
+        }
+      }
+    }
+
+    const initFile = (targetPath: string, templateName: string) => {
+      if (!fs.existsSync(targetPath)) {
+        const templatePath = path.join(
+          process.cwd(),
+          "templates",
+          templateName,
+        );
+        if (fs.existsSync(templatePath)) {
+          fs.writeFileSync(
+            targetPath,
+            fs.readFileSync(templatePath, "utf-8"),
+            "utf-8",
+          );
+          console.log(`Initialized ${templateName} at: ${targetPath}`);
+        }
+      }
+    };
+
+    if (!fs.existsSync(identityPath)) {
+      initFile(bootstrapPath, "BOOTSTRAP.md");
+    }
+
+    initFile(userPath, "USER.md");
+    initFile(identityPath, "IDENTITY.md");
+    initFile(soulPath, "SOUL.md");
+    initFile(mindPath, "MIND.md");
+
     // 2. Initialize env
     this.env = { ...process.env };
     console.log("DEBUG: AgentService initialized this.env", typeof this.env);
@@ -59,6 +121,7 @@ export class AgentService {
       this.google,
       onReminder,
     );
+    this.contextManager = new ContextService(this.workspaceDir);
     // Start Watcher
     this.watcher.watchDirectory(this.workspaceDir, (event, filename) => {
       this.state.addNotification(`File ${event}: ${filename}`);
@@ -150,18 +213,38 @@ export class AgentService {
       const skillsDir = path.join(process.cwd(), "skills");
       if (!fs.existsSync(skillsDir)) return "No skills installed.";
 
-      const files = fs.readdirSync(skillsDir).filter((f) => f.endsWith(".md"));
-      let allSkills = "";
-
-      for (const file of files) {
-        const content = fs.readFileSync(path.join(skillsDir, file), "utf-8");
-        allSkills += `\n--- FILE: ${file} ---\n${content}\n`;
+      const manifestPath = path.join(skillsDir, "skills.json");
+      let skillManifest: any[] = [];
+      if (fs.existsSync(manifestPath)) {
+        skillManifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
       }
 
-      return allSkills || "No skills installed.";
+      const items = fs.readdirSync(skillsDir, { withFileTypes: true });
+      let allSkills = "Available Skills (Summaries):\n";
+      let count = 0;
+
+      for (const item of items) {
+        if (item.isDirectory()) {
+          const skillFilePath = path.join(skillsDir, item.name, "SKILL.md");
+          if (fs.existsSync(skillFilePath)) {
+            // Find description from manifest if available
+            const manifestEntry = skillManifest.find(
+              (s: any) =>
+                s.name.toLowerCase() === item.name.replace(/_/g, " ") ||
+                s.path.includes(item.name),
+            );
+            const description =
+              manifestEntry?.description || "No description available.";
+            allSkills += `- ${item.name}: ${description} (Use 'get_skill_details' with skill_name: '${item.name}' for full instructions)\n`;
+            count++;
+          }
+        }
+      }
+
+      return count > 0 ? allSkills : "No skills with SKILL.md found.";
     } catch (e) {
       console.error("Failed to load skills:", e);
-      return "";
+      return "Error loading skills.";
     }
   }
 
@@ -203,19 +286,34 @@ export class AgentService {
       turns++;
 
       // 2. Orient & Decide (Brain)
+      const fragments = await this.contextManager.assembleContext({
+        history: this.state.getHistory(),
+        userProfile: this.loadUser(),
+        identity: this.loadMemoryFile("IDENTITY.md"),
+        soul: this.loadMemoryFile("SOUL.md"),
+        mind: this.loadMemoryFile("MIND.md"),
+        bootstrap: this.loadMemoryFile("BOOTSTRAP.md"),
+        skills: this.loadSkills(),
+      });
+
       const context = {
         history: this.state.getHistory(),
         workingMemory: this.state.getWorkingMemory(),
         contextSummary: this.state.getSummary(),
-        skills: this.loadSkills(), // Load skills if needed
-        systemPrompt:
-          getCognitiveSystemPrompt(
-            this.loadSkills(),
-            this.persona,
-            new Date().toLocaleString(),
-          ) +
-          `\n\nYour dedicated workspace directory is: ${this.workspaceDir}. You have access to secure API keys via environment variables (e.g. SERPER_API_KEY) if configured.`,
-        profile: this.state.getCoreContext(),
+        skills: this.loadSkills(),
+        systemPrompt: getCognitiveSystemPrompt({
+          skills: this.loadSkills(),
+          persona: this.persona,
+          currentDate: new Date().toLocaleString(),
+          workspaceDir: this.workspaceDir,
+          profilePath: path.join(
+            this.workspaceDir,
+            "memory",
+            "user",
+            "USER.md",
+          ),
+        }),
+        fragments,
         noRetries,
       };
 
@@ -246,11 +344,7 @@ export class AgentService {
         return { reply: thought.reply || "I encountered an error." };
       }
 
-      if (thought.reply) {
-        this.state.updateHistory({ role: "assistant", content: thought.reply });
-        return { reply: thought.reply };
-      }
-
+      // Handle Action FIRST if present
       if (thought.action) {
         const action = thought.action;
 
@@ -261,41 +355,50 @@ export class AgentService {
             content:
               "Error: You requested an action but did not specify the 'name' field.",
           });
-          continue;
-        }
+        } else {
+          // Sanitize Action Name (OpenAI regex requirement)
+          action.name = action.name.replace(/[^a-zA-Z0-9_-]/g, "_");
 
-        // Sanitize Action Name (OpenAI regex requirement)
-        action.name = action.name.replace(/[^a-zA-Z0-9_-]/g, "_");
+          sendLog(
+            `⚡ Action: ${action.name} (${JSON.stringify(action.arguments)})`,
+          );
 
-        sendLog(
-          `⚡ Action: ${action.name} (${JSON.stringify(action.arguments)})`,
-        );
+          // Execute Tool
+          let result = "";
+          try {
+            result = await this.executeTool(action, sendLog);
+          } catch (e: any) {
+            result = `Error executing tool: ${e.message}`;
+          }
 
-        // Execute Tool
-        let result = "";
-        try {
-          result = await this.executeTool(action, sendLog);
-        } catch (e: any) {
-          result = `Error executing tool: ${e.message}`;
-        }
-
-        this.state.updateHistory({
-          role: "assistant",
-          content: null,
-          function_call: {
-            name: action.name,
-            arguments: JSON.stringify(action.arguments || {}),
-          },
-        });
-
-        if (result) {
           this.state.updateHistory({
-            role: "function",
-            name: action.name,
-            content: result,
+            role: "assistant",
+            content: thought.reply || null, // Keep the reply if provided!
+            function_call: {
+              name: action.name,
+              arguments: JSON.stringify(action.arguments || {}),
+            },
           });
+
+          if (result) {
+            this.state.updateHistory({
+              role: "function",
+              name: action.name,
+              content: result,
+            });
+          }
         }
+
+        // If the model also provided a reply, it's already saved to history in the assistant turn above.
+        // We continue the OODA loop so the model can generate a final communicative response
+        // after processing the action result.
         continue;
+      }
+
+      // If NO action, just handle the reply
+      if (thought.reply) {
+        this.state.updateHistory({ role: "assistant", content: thought.reply });
+        return { reply: thought.reply };
       }
 
       // If we reach here, the model returned a JSON but it lacked both 'reply' and 'action'
@@ -315,6 +418,45 @@ export class AgentService {
     };
   }
 
+  private loadMemoryFile(filename: string): string | undefined {
+    try {
+      // Check in /agent/ first, then fallback to root /memory/
+      const agentPath = path.join(
+        this.workspaceDir,
+        "memory",
+        "agent",
+        filename,
+      );
+      const rootPath = path.join(this.workspaceDir, "memory", filename);
+      const filePath = fs.existsSync(agentPath) ? agentPath : rootPath;
+
+      if (fs.existsSync(filePath)) {
+        return fs.readFileSync(filePath, "utf-8");
+      }
+    } catch (e) {
+      console.error(`Failed to load ${filename}:`, e);
+    }
+    return undefined;
+  }
+
+  private loadUser(): string {
+    try {
+      const userPath = path.join(
+        this.workspaceDir,
+        "memory",
+        "user",
+        "USER.md",
+      );
+      if (fs.existsSync(userPath)) {
+        return fs.readFileSync(userPath, "utf-8");
+      }
+      return "No user profile available yet.";
+    } catch (e) {
+      console.error("Failed to load user profile:", e);
+      return "Error loading user profile.";
+    }
+  }
+
   private resolvePath(filePath: string): string {
     if (path.isAbsolute(filePath)) {
       return filePath;
@@ -328,47 +470,79 @@ export class AgentService {
   ): Promise<string> {
     const { name, arguments: args } = action;
 
-    // --- Memory Tools ---
-    if (name === "remember_fact") {
-      const mem = await this.state
-        .getMemoryService()
-        .addMemoryAsync(
-          args.category,
-          args.fact,
-          args.description,
-          args.importance || 5,
-          args.tags,
-        );
-      return `Fact remembered: ${mem.fact} (ID: ${mem.id}, Importance: ${mem.importance})`;
+    // Skill Guard: Prevent calling skills as tools
+    const skillsDir = path.join(process.cwd(), "skills");
+    if (fs.existsSync(path.join(skillsDir, name, "SKILL.md"))) {
+      return `Error: '${name}' is a skill, not a tool. You MUST use 'get_skill_details' with skill_name: '${name}' to retrieve the actual tool schemas and instructions first.`;
     }
 
-    if (name === "search_memory") {
-      const results = await this.state
-        .getMemoryService()
-        .searchMemoriesSemantic(args.query);
-      return `Found ${results.length} memories:\n${JSON.stringify(results.slice(0, 5), null, 2)}`;
-    }
-
-    if (name === "list_memories") {
-      const results = this.state.getMemoryService().listMemories(args.category);
-      return `Memories (${args.category || "all"}):\n${JSON.stringify(results.slice(0, 10), null, 2)}`;
-    }
+    // Memory tools removed in favor of Soul Protocol (Direct SOUL.md interaction)
 
     if (name === "create_skill") {
-      const skillsDir = path.join(process.cwd(), "skills");
+      const skillNameSlug = args.name.toLowerCase().replace(/\s+/g, "_");
+      const skillsDir = path.join(process.cwd(), "skills", skillNameSlug);
       if (!fs.existsSync(skillsDir))
         fs.mkdirSync(skillsDir, { recursive: true });
 
-      const skillPath = path.join(skillsDir, args.filename);
-      const content = `---
-name: ${args.name}
-description: ${args.description}
----
+      const skillPath = path.join(skillsDir, "SKILL.md");
 
-${args.instructions}`;
+      const templatePath = path.join(process.cwd(), "templates", "SKILL.md");
+      let content = "";
+      if (fs.existsSync(templatePath)) {
+        content = fs
+          .readFileSync(templatePath, "utf-8")
+          .replace("{{name}}", args.name)
+          .replace("{{description}}", args.description)
+          .replace("{{instructions}}", args.instructions);
+      } else {
+        // Fallback if template missing
+        content = `---\nname: ${args.name}\ndescription: ${args.description}\n---\n\n${args.instructions}`;
+      }
 
       fs.writeFileSync(skillPath, content);
-      return `New skill '${args.name}' created and saved to '${args.filename}'.`;
+
+      // Update manifest
+      const manifestPath = path.join(process.cwd(), "skills", "skills.json");
+      let manifest = [];
+      if (fs.existsSync(manifestPath)) {
+        manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+      }
+
+      // Update or add entry
+      const existingIndex = manifest.findIndex((s: any) =>
+        s.path.includes(skillNameSlug),
+      );
+      const entry = {
+        name: args.name,
+        description: args.description,
+        path: `skills/${skillNameSlug}/SKILL.md`,
+      };
+
+      if (existingIndex >= 0) {
+        manifest[existingIndex] = entry;
+      } else {
+        manifest.push(entry);
+      }
+
+      fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+      return `New skill '${args.name}' created in folder '${skillNameSlug}/SKILL.md' and added to manifest.`;
+    }
+
+    if (name === "get_skill_details") {
+      // args.skill_name could be the folder name or the full path
+      const folderName = args.skill_name.replace("skills/", "").split("/")[0];
+      const skillPath = path.join(
+        process.cwd(),
+        "skills",
+        folderName,
+        "SKILL.md",
+      );
+
+      if (!fs.existsSync(skillPath)) {
+        return `Skill folder '${folderName}' does not contain a SKILL.md file.`;
+      }
+      return fs.readFileSync(skillPath, "utf-8");
     }
 
     // --- System / Shell Tools ---
@@ -405,8 +579,20 @@ ${args.instructions}`;
       const dir = path.dirname(p);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 
-      fs.writeFileSync(p, args.content);
-      return `File written to ${p}`;
+      if (args.append) {
+        let contentToAppend = args.content;
+        if (fs.existsSync(p)) {
+          const currentContent = fs.readFileSync(p, "utf-8");
+          if (currentContent && !currentContent.endsWith("\n")) {
+            contentToAppend = "\n" + contentToAppend;
+          }
+        }
+        fs.appendFileSync(p, contentToAppend, "utf-8");
+        return `Content appended to ${p}`;
+      } else {
+        fs.writeFileSync(p, args.content, "utf-8");
+        return `File written to ${p}`;
+      }
     }
 
     if (name === "move_file") {
@@ -531,7 +717,7 @@ ${args.instructions}`;
       if (!this.google.isEmailEnabled())
         return "Email integration is disabled. Enable it with 'supernova setup email'.";
       try {
-        const email = await this.google.readEmail(args.id);
+        const email = await this.google.readEmail(args.id, args.format);
         return JSON.stringify(email, null, 2);
       } catch (e: any) {
         return `Gmail error: ${e.message}`;
@@ -547,6 +733,114 @@ ${args.instructions}`;
         );
         await this.google.sendEmail(args.to, args.subject, args.body);
         return `Email successfully sent to ${args.to}`;
+      } catch (e: any) {
+        return `Gmail error: ${e.message}`;
+      }
+    }
+
+    if (name === "trash_email") {
+      if (!this.google.isEmailEnabled())
+        return "Email integration is disabled. Enable it with 'supernova setup email'.";
+      try {
+        await this.google.trashEmail(args.id);
+        return `Email ${args.id} moved to trash.`;
+      } catch (e: any) {
+        return `Gmail error: ${e.message}`;
+      }
+    }
+
+    if (name === "archive_email") {
+      if (!this.google.isEmailEnabled())
+        return "Email integration is disabled. Enable it with 'supernova setup email'.";
+      try {
+        await this.google.archiveEmail(args.id);
+        return `Email ${args.id} archived.`;
+      } catch (e: any) {
+        return `Gmail error: ${e.message}`;
+      }
+    }
+
+    if (name === "modify_email_labels") {
+      if (!this.google.isEmailEnabled())
+        return "Email integration is disabled. Enable it with 'supernova setup email'.";
+      try {
+        await this.google.modifyEmailLabels(
+          args.id,
+          args.addLabels,
+          args.removeLabels,
+        );
+        return `Labels updated for email ${args.id}.`;
+      } catch (e: any) {
+        return `Gmail error: ${e.message}`;
+      }
+    }
+
+    if (name === "untrash_email") {
+      if (!this.google.isEmailEnabled())
+        return "Email integration is disabled. Enable it with 'supernova setup email'.";
+      try {
+        await this.google.untrashEmail(args.id);
+        return `Email ${args.id} recovered from trash.`;
+      } catch (e: any) {
+        return `Gmail error: ${e.message}`;
+      }
+    }
+
+    if (name === "list_labels") {
+      if (!this.google.isEmailEnabled())
+        return "Email integration is disabled. Enable it with 'supernova setup email'.";
+      try {
+        const labels = await this.google.listLabels();
+        return JSON.stringify(labels, null, 2);
+      } catch (e: any) {
+        return `Gmail error: ${e.message}`;
+      }
+    }
+
+    if (name === "create_draft") {
+      if (!this.google.isEmailEnabled())
+        return "Email integration is disabled. Enable it with 'supernova setup email'.";
+      try {
+        const draft = await this.google.createDraft(
+          args.to,
+          args.subject,
+          args.body,
+          args.threadId,
+        );
+        return `Draft created successfully (ID: ${draft.id}).`;
+      } catch (e: any) {
+        return `Gmail error: ${e.message}`;
+      }
+    }
+
+    if (name === "list_drafts") {
+      if (!this.google.isEmailEnabled())
+        return "Email integration is disabled. Enable it with 'supernova setup email'.";
+      try {
+        const drafts = await this.google.listDrafts();
+        return JSON.stringify(drafts, null, 2);
+      } catch (e: any) {
+        return `Gmail error: ${e.message}`;
+      }
+    }
+
+    if (name === "send_draft") {
+      if (!this.google.isEmailEnabled())
+        return "Email integration is disabled. Enable it with 'supernova setup email'.";
+      try {
+        await this.google.sendDraft(args.id);
+        return `Draft ${args.id} sent successfully.`;
+      } catch (e: any) {
+        return `Gmail error: ${e.message}`;
+      }
+    }
+
+    if (name === "reply_to_email") {
+      if (!this.google.isEmailEnabled())
+        return "Email integration is disabled. Enable it with 'supernova setup email'.";
+      try {
+        await this.google.replyToEmail(args.threadId, args.body);
+        return `Reply sent to thread ${args.threadId}.`;
       } catch (e: any) {
         return `Gmail error: ${e.message}`;
       }
@@ -753,6 +1047,46 @@ Format: Return ONLY the post text. No "Here is the post" preamble.`;
       const deleted = await this.scheduler.deleteReminder(args.id);
       if (!deleted) return `Reminder with ID ${args.id} not found.`;
       return `✅ Reminder deleted.`;
+    }
+
+    if (name === "update_config") {
+      try {
+        const configDir = path.join(os.homedir(), ".supernova");
+        const configFile = path.join(configDir, "config.json");
+
+        if (!fs.existsSync(configDir)) {
+          fs.mkdirSync(configDir, { recursive: true });
+        }
+
+        let config: any = {};
+        if (fs.existsSync(configFile)) {
+          try {
+            config = JSON.parse(fs.readFileSync(configFile, "utf8"));
+          } catch (e) {}
+        }
+
+        const key = args.key.toUpperCase();
+        let valueToSave = args.value;
+
+        if (args.isSecret) {
+          try {
+            valueToSave = encrypt(args.value);
+          } catch (e) {
+            console.error("Encryption failed, saving plain text");
+          }
+        }
+
+        config[key] = valueToSave;
+        fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
+
+        // Update current process environment so it's usable immediately
+        this.env[key] = args.value;
+        process.env[key] = args.value;
+
+        return `✅ Configuration updated: ${key} has been saved ${args.isSecret ? "(encrypted)" : ""}. It is now available in your environment.`;
+      } catch (e: any) {
+        return `Failed to update config: ${e.message}`;
+      }
     }
 
     return "Unknown tool.";

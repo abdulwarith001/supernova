@@ -1,0 +1,27 @@
+[
+  {
+    "name": "Web Search",
+    "description": "Search the web for latest news and information using Serper.dev API.",
+    "path": "skills/web_search/SKILL.md"
+  },
+  {
+    "name": "Calendar Management",
+    "description": "Set up, list, and manage meetings and events using Google Calendar.",
+    "path": "skills/calendar/SKILL.md"
+  },
+  {
+    "name": "Email Management",
+    "description": "Search, read, and send emails using Gmail.",
+    "path": "skills/email/SKILL.md"
+  },
+  {
+    "name": "Reminders",
+    "description": "Advanced scheduling of reminders and autonomous tasks including recurring actions.",
+    "path": "skills/reminders/SKILL.md"
+  },
+  {
+    "name": "Remember User Email",
+    "description": "A skill to remember the user's email address for future reference.",
+    "path": "skills/remember_user_email/SKILL.md"
+  }
+]

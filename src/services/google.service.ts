@@ -94,8 +94,8 @@ export class GoogleService {
     const gmail = google.gmail({ version: "v1", auth: this.auth });
     const res = await gmail.users.messages.list({
       userId: "me",
-      q: query,
-      maxResults: 5,
+      q: query === "all" ? "" : query,
+      maxResults: 10,
     });
 
     if (!res.data.messages) return [];
@@ -129,7 +129,7 @@ export class GoogleService {
     return detailedMessages;
   }
 
-  async readEmail(id: string) {
+  async readEmail(id: string, format: "full" | "snippet" = "snippet") {
     if (!this.auth) throw new Error("Gmail not configured.");
     const gmail = google.gmail({ version: "v1", auth: this.auth });
     const res = await gmail.users.messages.get({
@@ -140,15 +140,40 @@ export class GoogleService {
     const headers = res.data.payload?.headers || [];
     const subject = headers.find((h: any) => h.name === "Subject")?.value || "";
     const from = headers.find((h: any) => h.name === "From")?.value || "";
-    const body = res.data.snippet || ""; // Simplification for now to avoid huge base64 body parsing
+    const date = headers.find((h: any) => h.name === "Date")?.value || "";
+
+    let body = res.data.snippet || "";
+    if (format === "full") {
+      body = this.extractBody(res.data.payload) || body;
+    }
 
     return {
       id: res.data.id,
       from,
       subject,
+      date,
+      body,
       snippet: res.data.snippet,
-      historyId: res.data.historyId,
     };
+  }
+
+  private extractBody(payload: any): string {
+    if (!payload) return "";
+    if (payload.body?.data) {
+      return Buffer.from(payload.body.data, "base64").toString("utf-8");
+    }
+    if (payload.parts) {
+      for (const part of payload.parts) {
+        if (part.mimeType === "text/plain" && part.body?.data) {
+          return Buffer.from(part.body.data, "base64").toString("utf-8");
+        }
+        if (part.parts) {
+          const body = this.extractBody(part);
+          if (body) return body;
+        }
+      }
+    }
+    return "";
   }
 
   async sendEmail(to: string, subject: string, body: string) {
@@ -175,6 +200,176 @@ export class GoogleService {
       userId: "me",
       requestBody: {
         raw: encodedMail,
+      },
+    });
+    return res.data;
+  }
+
+  async trashEmail(id: string) {
+    if (!this.auth) throw new Error("Gmail not configured.");
+    const gmail = google.gmail({ version: "v1", auth: this.auth });
+    const res = await gmail.users.messages.trash({
+      userId: "me",
+      id,
+    });
+    return res.data;
+  }
+
+  async archiveEmail(id: string) {
+    if (!this.auth) throw new Error("Gmail not configured.");
+    const gmail = google.gmail({ version: "v1", auth: this.auth });
+    // Archiving in Gmail means removing the 'INBOX' label
+    const res = await gmail.users.messages.modify({
+      userId: "me",
+      id,
+      requestBody: {
+        removeLabelIds: ["INBOX"],
+      },
+    });
+    return res.data;
+  }
+
+  async modifyEmailLabels(
+    id: string,
+    addLabels: string[] = [],
+    removeLabels: string[] = [],
+  ) {
+    if (!this.auth) throw new Error("Gmail not configured.");
+    const gmail = google.gmail({ version: "v1", auth: this.auth });
+    const res = await gmail.users.messages.modify({
+      userId: "me",
+      id,
+      requestBody: {
+        addLabelIds: addLabels,
+        removeLabelIds: removeLabels,
+      },
+    });
+    return res.data;
+  }
+
+  async untrashEmail(id: string) {
+    if (!this.auth) throw new Error("Gmail not configured.");
+    const gmail = google.gmail({ version: "v1", auth: this.auth });
+    const res = await gmail.users.messages.untrash({
+      userId: "me",
+      id,
+    });
+    return res.data;
+  }
+
+  async listLabels() {
+    if (!this.auth) throw new Error("Gmail not configured.");
+    const gmail = google.gmail({ version: "v1", auth: this.auth });
+    const res = await gmail.users.labels.list({
+      userId: "me",
+    });
+    return res.data.labels;
+  }
+
+  async createDraft(
+    to: string,
+    subject: string,
+    body: string,
+    threadId?: string,
+  ) {
+    if (!this.auth) throw new Error("Gmail not configured.");
+    const gmail = google.gmail({ version: "v1", auth: this.auth });
+
+    const str = [
+      'Content-Type: text/plain; charset="UTF-8"\n',
+      "MIME-Version: 1.0\n",
+      "Content-Transfer-Encoding: 7bit\n",
+      `to: ${to}\n`,
+      `subject: ${subject}\n\n`,
+      body,
+    ].join("");
+
+    const encodedMail = Buffer.from(str)
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+
+    const res = await gmail.users.drafts.create({
+      userId: "me",
+      requestBody: {
+        message: {
+          raw: encodedMail,
+          threadId,
+        },
+      },
+    });
+    return res.data;
+  }
+
+  async listDrafts() {
+    if (!this.auth) throw new Error("Gmail not configured.");
+    const gmail = google.gmail({ version: "v1", auth: this.auth });
+    const res = await gmail.users.drafts.list({
+      userId: "me",
+      maxResults: 10,
+    });
+    return res.data.drafts;
+  }
+
+  async sendDraft(id: string) {
+    if (!this.auth) throw new Error("Gmail not configured.");
+    const gmail = google.gmail({ version: "v1", auth: this.auth });
+    const res = await gmail.users.drafts.send({
+      userId: "me",
+      requestBody: {
+        id,
+      },
+    });
+    return res.data;
+  }
+
+  async replyToEmail(threadId: string, body: string) {
+    if (!this.auth) throw new Error("Gmail not configured.");
+    const gmail = google.gmail({ version: "v1", auth: this.auth });
+
+    // 1. Get thread info to find latest message and recipient
+    const thread = await gmail.users.threads.get({
+      userId: "me",
+      id: threadId,
+    });
+
+    const messages = thread.data.messages || [];
+    const lastMsg = messages[messages.length - 1];
+    if (!lastMsg) throw new Error("Thread not found or empty.");
+
+    const headers = lastMsg.payload?.headers || [];
+    const subject = headers.find((h: any) => h.name === "Subject")?.value || "";
+    const from = headers.find((h: any) => h.name === "From")?.value || "";
+    const msgId =
+      headers.find((h: any) => h.name === "Message-ID")?.value || "";
+
+    // 2. Format reply
+    const to = from; // Simple reply address
+    const replySubject = subject.startsWith("Re:") ? subject : `Re: ${subject}`;
+
+    const str = [
+      'Content-Type: text/plain; charset="UTF-8"\n',
+      "MIME-Version: 1.0\n",
+      "Content-Transfer-Encoding: 7bit\n",
+      `to: ${to}\n`,
+      `subject: ${replySubject}\n`,
+      `In-Reply-To: ${msgId}\n`,
+      `References: ${msgId}\n\n`,
+      body,
+    ].join("");
+
+    const encodedMail = Buffer.from(str)
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+
+    const res = await gmail.users.messages.send({
+      userId: "me",
+      requestBody: {
+        raw: encodedMail,
+        threadId,
       },
     });
     return res.data;

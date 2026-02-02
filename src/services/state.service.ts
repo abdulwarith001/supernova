@@ -1,14 +1,10 @@
 import { Message, Memory } from "../types/cognitive";
-import { MemoryService } from "./memory.service";
 
 export class StateService {
   private memory: Memory;
   private maxHistory: number = 20;
   private notifications: string[] = [];
-  private memoryService: MemoryService;
-
   constructor() {
-    this.memoryService = new MemoryService();
     this.memory = {
       shortTerm: [],
       working: "", // Initially empty
@@ -19,9 +15,6 @@ export class StateService {
   updateHistory(message: Message) {
     this.memory.shortTerm.push(message);
     if (this.memory.shortTerm.length > this.maxHistory) {
-      // We'll let AgentService handle summarization, so we won't shift here automatically
-      // if we want to preserve the context for summarization.
-      // this.memory.shortTerm.shift();
     }
   }
 
@@ -60,18 +53,10 @@ export class StateService {
     return n;
   }
 
-  getCoreContext(): string {
-    return this.memoryService.getCoreContext();
-  }
-
   clear() {
     this.memory = {
       shortTerm: [],
       working: "",
     };
-  }
-
-  getMemoryService(): MemoryService {
-    return this.memoryService;
   }
 }
