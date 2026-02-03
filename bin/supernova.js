@@ -37,15 +37,46 @@ if (command === "onboard") {
   spawnTS(path.join(__dirname, "../src/cli/onboard.ts")); // Reuse onboard for now
 } else if (command === "setup") {
   spawnTS(path.join(__dirname, "../src/cli/setup.ts"), [subCommand || ""]);
-} else if (command === "dashboard") {
-  console.log("🚀 Launching Supernova Dashboard...");
-  spawnTS(path.join(__dirname, "../src/server/index.ts"));
 } else if (command === "mode") {
   spawnTS(path.join(__dirname, "../src/cli/mode.ts"), [subCommand || ""]);
 } else if (command === "keys") {
   spawnTS(path.join(__dirname, "../src/cli/keys.ts"));
+} else if (command === "wake") {
+  spawnTS(path.join(__dirname, "../src/cli/wake.ts"), args.slice(1));
+} else if (command === "sleep") {
+  spawnTS(path.join(__dirname, "../src/cli/sleep.ts"));
+} else if (command === "status") {
+  spawnTS(path.join(__dirname, "../src/cli/status.ts"));
+} else if (command === "hive-mind") {
+  spawnTS(path.join(__dirname, "../src/cli/hive-mind.ts"), [
+    subCommand || "help",
+  ]);
+} else if (command === "chat") {
+  spawnTS(path.join(__dirname, "../src/cli/chat.ts"));
+} else if (command === "logs") {
+  // Pass flags (subCommand could be --tail)
+  const logArgs = [subCommand || "", thirdArg || ""];
+  spawnTS(path.join(__dirname, "../src/cli/logs.ts"), logArgs);
+} else if (command === "meditate") {
+  spawnTS(path.join(__dirname, "../src/cli/meditate.ts"));
 } else {
   console.log("Usage:");
+  console.log(
+    "  supernova wake [--chat]    Start the Agent Daemon (Background Life)",
+  );
+  console.log("  supernova chat             Open the Chat Interface");
+  console.log(
+    "  supernova meditate         Consolidate history into permanent memories",
+  );
+  console.log("  supernova logs [--tail]    View Agent Logs");
+  console.log("  supernova sleep            Stop the Agent Daemon");
+  console.log("  supernova status           Check Agent Health");
+  console.log(
+    "  supernova hive-mind --link Tether agent permanently to your system",
+  );
+  console.log(
+    "  supernova hive-mind --unlink Break the permanent system tether",
+  );
   console.log("  supernova onboard          Run interactive setup wizard");
   console.log(
     "  supernova setup            Manage integrations (Calendar, Email, etc.)",
@@ -56,5 +87,4 @@ if (command === "onboard") {
   );
   console.log("  supernova skills list      List installed skills");
   console.log("  supernova skills add <url> Add a new skill");
-  console.log("  supernova dashboard        Launch the AI agent dashboard");
 }

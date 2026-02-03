@@ -4,9 +4,11 @@ import os from "os";
 import { GoogleService } from "./google.service";
 import * as cron from "node-cron";
 
-export interface Job {
+import { SessionService } from "./session.service";
+
+export interface Spark {
   id: string;
-  type: "email_reminder" | "notification";
+  type: "email_reminder" | "notification" | "system";
   message: string;
   cronExpression?: string;
   dueAt?: number;
@@ -14,22 +16,30 @@ export interface Job {
   completedAt?: number;
   autoExecute?: boolean;
   taskPrompt?: string;
+
+  // Hive Mind Properties
+  stressLevel: number; // 0-100 (Impact on Cortisol)
+  parasitic: boolean; // True if overdue and actively causing anxiety
+  createdBy: "user" | "spark" | "system";
+  escalationStage: number; // 0=Polite, 1=Nag, 2=Panic, 3=Nuclear
 }
 
 export class SchedulerService {
-  private jobs: Job[] = [];
+  private jobs: Spark[] = [];
   private persistenceFile: string;
   private tasks: Map<string, cron.ScheduledTask> = new Map();
+  private parasiticTask?: cron.ScheduledTask;
   private google: GoogleService;
+  private session?: SessionService;
   private config: any = {};
-
-  private onReminder?: (job: Job) => void;
   private cleanupTask?: cron.ScheduledTask;
+
+  private onReminder?: (job: Spark) => void;
 
   constructor(
     workspaceDir: string,
     googleService: GoogleService,
-    onReminder?: (job: Job) => void,
+    onReminder?: (job: Spark) => void,
   ) {
     this.persistenceFile = path.join(workspaceDir, "reminders.json");
     this.google = googleService;
@@ -39,6 +49,13 @@ export class SchedulerService {
 
     // Start Cleanup Task (Runs every hour)
     this.cleanupTask = cron.schedule("0 * * * *", () => this.cleanup());
+
+    // Start Parasitic Loop (The Anxiety Engine) - Runs every minute
+    this.parasiticTask = cron.schedule("* * * * *", () => this.parasiteLoop());
+  }
+
+  public setSession(session: SessionService) {
+    this.session = session;
   }
 
   private loadConfig() {
@@ -86,7 +103,7 @@ export class SchedulerService {
     }
   }
 
-  private scheduleCron(job: Job) {
+  private scheduleCron(job: Spark) {
     if (job.status !== "pending") return;
 
     let cronTime = "";
@@ -115,8 +132,16 @@ export class SchedulerService {
 
       this.tasks.set(job.id, task);
     } else if (job.dueAt && job.dueAt <= Date.now()) {
-      console.log(`Job ${job.id} is past due, executing now.`);
-      this.executeJob(job);
+      if (job.autoExecute) {
+        console.log(
+          `Job ${job.id} is past due, executing autonomous task now.`,
+        );
+        this.executeJob(job);
+      } else {
+        console.log(`Spark ${job.id} is past due, allowing it to fester.`);
+        job.parasitic = true;
+        this.saveJobs();
+      }
     }
   }
 
@@ -128,13 +153,13 @@ export class SchedulerService {
       autoExecute?: boolean;
       taskPrompt?: string;
     } = {},
-  ): Promise<{ job: Job; isDuplicate: boolean }> {
+  ): Promise<{ job: Spark; isDuplicate: boolean }> {
     if (dueAt && dueAt < Date.now()) {
       throw new Error(
         "Reminder time is in the past. Please check the current time.",
       );
     }
-    const job: Job = {
+    const job: Spark = {
       id: Math.random().toString(36).substring(7),
       type: "email_reminder",
       message,
@@ -143,6 +168,12 @@ export class SchedulerService {
       autoExecute: options.autoExecute,
       taskPrompt: options.taskPrompt,
       status: "pending",
+
+      // Spark Properties
+      stressLevel: 0,
+      parasitic: false,
+      createdBy: "user",
+      escalationStage: 0,
     };
 
     // Check for duplicates
@@ -170,7 +201,10 @@ export class SchedulerService {
     return { job, isDuplicate: false };
   }
 
-  async updateReminder(id: string, updates: Partial<Job>): Promise<Job | null> {
+  async updateReminder(
+    id: string,
+    updates: Partial<Spark>,
+  ): Promise<Spark | null> {
     const index = this.jobs.findIndex((j) => j.id === id);
     if (index === -1) return null;
 
@@ -204,14 +238,23 @@ export class SchedulerService {
     return true;
   }
 
-  listReminders(status?: "pending" | "completed"): Job[] {
+  listReminders(status?: "pending" | "completed"): Spark[] {
     if (status) {
       return this.jobs.filter((j) => j.status === status);
     }
     return this.jobs;
   }
 
-  private async executeJob(job: Job) {
+  getSummary() {
+    return {
+      total: this.jobs.length,
+      pending: this.jobs.filter((j) => j.status === "pending").length,
+      completed: this.jobs.filter((j) => j.status === "completed").length,
+      parasitic: this.jobs.filter((j) => j.parasitic).length,
+    };
+  }
+
+  private async executeJob(job: Spark) {
     const index = this.jobs.findIndex((j) => j.id === job.id);
     if (index === -1) return;
 
@@ -220,6 +263,18 @@ export class SchedulerService {
       if (this.jobs[index].status === "completed") return;
       this.jobs[index].status = "completed";
       this.jobs[index].completedAt = Date.now();
+
+      // Relief: If it was parasitic, grant massive relief
+      if (job.parasitic) {
+        console.log(`😌 Relief: Parasitic Spark "${job.message}" resolved.`);
+        this.session?.injectNeuro({ dopamine: 20, cortisol: -20, oxytocin: 5 });
+        this.jobs[index].parasitic = false;
+        this.jobs[index].stressLevel = 0;
+      } else {
+        // Standard satisfaction
+        this.session?.injectNeuro({ dopamine: 5, cortisol: -2 });
+      }
+
       this.saveJobs();
     }
 
@@ -292,6 +347,47 @@ export class SchedulerService {
       console.log(
         `🗑️ Deleted ${initialCount - this.jobs.length} old reminders.`,
       );
+      this.saveJobs();
+    }
+  }
+
+  private parasiteLoop() {
+    const now = Date.now();
+    let totalAnxiety = 0;
+    const activeParasites: string[] = [];
+
+    this.jobs.forEach((spark) => {
+      if (spark.status !== "pending") return;
+
+      // Check if Overdue (Grace period of 5 mins)
+      if (
+        spark.dueAt &&
+        spark.dueAt < now - 5 * 60 * 1000 &&
+        !spark.cronExpression
+      ) {
+        spark.parasitic = true;
+        spark.stressLevel = Math.min(100, spark.stressLevel + 1); // Slow burn
+
+        // Escalation Logic
+        if (spark.stressLevel > 80)
+          spark.escalationStage = 3; // Nuclear
+        else if (spark.stressLevel > 50)
+          spark.escalationStage = 2; // Panic
+        else if (spark.stressLevel > 20) spark.escalationStage = 1; // Nag
+
+        totalAnxiety += spark.stressLevel / 10; // Cumulative weight
+        activeParasites.push(spark.message);
+
+        console.log(
+          `🦠 Spark "${spark.message}" is PARASITIC. Stress: ${spark.stressLevel}%`,
+        );
+      }
+    });
+
+    if (totalAnxiety > 0 || activeParasites.length === 0) {
+      // Inject Anxiety into agent and update list
+      this.session?.injectNeuro({ cortisol: totalAnxiety, dopamine: -1 });
+      this.session?.setAnxieties(activeParasites);
       this.saveJobs();
     }
   }

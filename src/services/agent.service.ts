@@ -3,19 +3,20 @@ import { BrainService } from "./brain.service";
 import { StateService } from "./state.service";
 import { WatcherService } from "./watcher.service";
 import { getCognitiveSystemPrompt } from "./prompts";
-import { SchedulerService, Job } from "./scheduler.service";
+import { SchedulerService, Spark } from "./scheduler.service";
 import { GoogleService } from "./google.service";
 import { ResumeService } from "./resume.service";
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { exec } from "child_process";
+import { exec, execSync } from "child_process";
 import util from "util";
 import clipboardy from "clipboardy";
 import notifier from "node-notifier";
 import { decrypt, encrypt } from "../utils/crypto";
 import { parseSkillManifest } from "../utils/parser";
 import { ContextService } from "./context.service";
+import { SessionService } from "./session.service";
 const execPromise = util.promisify(exec);
 
 export class AgentService {
@@ -29,11 +30,12 @@ export class AgentService {
   private resume: ResumeService;
   public scheduler: SchedulerService;
   private contextManager: ContextService;
+  public session: SessionService;
 
   constructor(
     apiKey: string,
     model: string = "gpt-4o",
-    onReminder?: (job: Job) => void,
+    onReminder?: (job: Spark) => void,
   ) {
     // 1. Initialize Workspace First (Required for other services)
     this.workspaceDir = path.join(os.homedir(), "supernova_workspace");
@@ -112,7 +114,9 @@ export class AgentService {
 
     // 3. Initialize Services
     this.brain = new BrainService(apiKey, undefined, model);
-    this.state = new StateService();
+    this.state = new StateService(
+      path.join(this.workspaceDir, "memory", "agent", "history.json"),
+    );
     this.watcher = new WatcherService();
     this.google = new GoogleService();
     this.resume = new ResumeService();
@@ -122,9 +126,24 @@ export class AgentService {
       onReminder,
     );
     this.contextManager = new ContextService(this.workspaceDir);
-    // Start Watcher
+    this.session = new SessionService(this, this.workspaceDir);
+    this.session.startLife();
+
+    // Connect Hive Mind (Spark Engine)
+    this.scheduler.setSession(this.session);
+
+    // Start Watcher with Signal-to-Noise Filtering
     this.watcher.watchDirectory(this.workspaceDir, (event, filename) => {
-      this.state.addNotification(`File ${event}: ${filename}`);
+      // 🕵️ Filter Noise: Ignore internal agent files and system junk
+      const isInternal =
+        filename.startsWith("memory") ||
+        filename.includes(".DS_Store") ||
+        filename === "reminders.json" ||
+        filename.startsWith(".git");
+
+      if (!isInternal) {
+        this.state.addNotification(`File ${event}: ${filename}`);
+      }
     });
 
     // Load & Decrypt Configuration
@@ -183,6 +202,54 @@ export class AgentService {
       } catch (e) {
         console.error("Failed to load secure config:", e);
       }
+    }
+
+    // 4. Initial Protection Pass
+    this.protectMemoryFiles();
+  }
+
+  private protectMemoryFiles() {
+    const memoryFiles = [
+      path.join(this.workspaceDir, "memory", "user", "USER.md"),
+      path.join(this.workspaceDir, "memory", "agent", "IDENTITY.md"),
+      path.join(this.workspaceDir, "memory", "agent", "SOUL.md"),
+      path.join(this.workspaceDir, "memory", "agent", "MIND.md"),
+      path.join(this.workspaceDir, "memory", "agent", "BOOTSTRAP.md"),
+      path.join(this.workspaceDir, "memory", "agent", "history.json"),
+    ];
+
+    for (const file of memoryFiles) {
+      if (fs.existsSync(file)) {
+        this.setFileImmutable(file, true);
+      }
+    }
+  }
+
+  private isProtectedPath(filePath: string): boolean {
+    const normalized = path.normalize(filePath);
+    const relative = path.relative(this.workspaceDir, normalized);
+    return (
+      (relative.startsWith(path.join("memory", "agent")) ||
+        relative.startsWith(path.join("memory", "user"))) &&
+      (normalized.endsWith(".md") || normalized.endsWith(".json"))
+    );
+  }
+
+  private setFileImmutable(filePath: string, immutable: boolean) {
+    try {
+      if (process.platform === "darwin") {
+        const flag = immutable ? "uchg" : "nouchg";
+        execSync(`chflags ${flag} "${filePath}"`);
+      } else {
+        // Fallback for Linux/Windows: chmod -w / +w
+        const mode = immutable ? 0o444 : 0o644;
+        fs.chmodSync(filePath, mode);
+      }
+    } catch (e) {
+      console.error(
+        `Failed to set immutable flag (${immutable}) on ${filePath}:`,
+        e,
+      );
     }
   }
 
@@ -265,18 +332,11 @@ export class AgentService {
 
     sendLog(`🧠 Thinking...`);
 
-    // 4. Summarize History if too long
+    // 4. Meditate (Fact Extraction & History Purging) if too long
     const historyToKeep = 20;
     const currentHistory = this.state.getHistory();
     if (currentHistory.length > historyToKeep + 10) {
-      sendLog("📝 Summarizing conversation history to save context...");
-      const messagesToSummarize = currentHistory.slice(0, 10);
-      const summary = await this.brain.summarize(messagesToSummarize);
-      this.state.updateSummary(
-        (this.state.getSummary() || "") + "\n" + summary,
-      );
-      this.state.trimHistory(10);
-      sendLog("✅ History summarized.");
+      this.meditate();
     }
 
     let turns = 0;
@@ -312,6 +372,7 @@ export class AgentService {
             "user",
             "USER.md",
           ),
+          envKeys: Object.keys(this.env),
         }),
         fragments,
         noRetries,
@@ -341,6 +402,7 @@ export class AgentService {
       // 3. Act
       if (thought.error) {
         sendLog(`❌ Error: ${thought.error}`);
+        this.session.stimulus("failure");
         return { reply: thought.reply || "I encountered an error." };
       }
 
@@ -369,6 +431,7 @@ export class AgentService {
             result = await this.executeTool(action, sendLog);
           } catch (e: any) {
             result = `Error executing tool: ${e.message}`;
+            this.session.stimulus("failure");
           }
 
           this.state.updateHistory({
@@ -386,6 +449,7 @@ export class AgentService {
               name: action.name,
               content: result,
             });
+            this.session.stimulus("success");
           }
         }
 
@@ -398,6 +462,7 @@ export class AgentService {
       // If NO action, just handle the reply
       if (thought.reply) {
         this.state.updateHistory({ role: "assistant", content: thought.reply });
+        this.session.stimulus("chat");
         return { reply: thought.reply };
       }
 
@@ -416,6 +481,62 @@ export class AgentService {
       reply:
         "I've reached my thinking limit (15 turns) or I'm unable to decide on the next action. Please try rephrasing your request.",
     };
+  }
+
+  public async meditate() {
+    console.log("🧘 [MEDITATION] Entering deep reflection cycle...");
+    const history = this.state.getHistory();
+    const messagesToProcess = history.slice(0, 10);
+
+    const memoryDir = path.join(this.workspaceDir, "memory");
+    const userPath = path.join(memoryDir, "user", "USER.md");
+    const soulPath = path.join(memoryDir, "agent", "SOUL.md");
+    const identityPath = path.join(memoryDir, "agent", "IDENTITY.md");
+
+    // 1. Read Current Context
+    const currentContext = {
+      user: fs.existsSync(userPath) ? fs.readFileSync(userPath, "utf-8") : "",
+      soul: fs.existsSync(soulPath) ? fs.readFileSync(soulPath, "utf-8") : "",
+      identity: fs.existsSync(identityPath)
+        ? fs.readFileSync(identityPath, "utf-8")
+        : "",
+    };
+
+    // 2. Extract and Merge Facts
+    const updates = await this.brain.extractFacts(
+      messagesToProcess,
+      currentContext,
+    );
+
+    // 3. Apply Updates (Full Overwrite for structure preservation)
+    const writeIfDefined = (filePath: string, content: string | undefined) => {
+      if (content && content.trim() !== "" && content !== "Empty") {
+        try {
+          const isProtected = this.isProtectedPath(filePath);
+          if (isProtected) this.setFileImmutable(filePath, false);
+          fs.writeFileSync(filePath, content, "utf-8");
+          if (isProtected) this.setFileImmutable(filePath, true);
+          console.log(`✨ [MEDITATION] Updated ${path.basename(filePath)}.`);
+        } catch (e) {
+          console.error(`Failed to update ${path.basename(filePath)}:`, e);
+        }
+      }
+    };
+
+    writeIfDefined(userPath, updates.user_md);
+    writeIfDefined(soulPath, updates.soul_md);
+    writeIfDefined(identityPath, updates.identity_md);
+
+    // 4. Summarize and Purge
+    const currentSummary = this.state.getSummary();
+    const newSummary = await this.brain.summarize(
+      messagesToProcess,
+      currentSummary,
+    );
+    this.state.updateSummary(newSummary);
+    this.state.trimHistory(10);
+
+    console.log("🕉️ [MEDITATION] Context consolidated and memory refined.");
   }
 
   private loadMemoryFile(filename: string): string | undefined {
@@ -571,6 +692,13 @@ export class AgentService {
     if (name === "read_file") {
       const p = this.resolvePath(args.path);
       if (!fs.existsSync(p)) return "File not found.";
+      const stats = fs.statSync(p);
+      const maxSize = 100 * 1024; // 100KB safety cap
+
+      if (stats.size > maxSize) {
+        const content = fs.readFileSync(p, "utf-8").substring(0, maxSize);
+        return `⚠️ [TRUNCATED] File is too large (${(stats.size / 1024).toFixed(1)}KB). Showing first 100KB:\n\n${content}`;
+      }
       return fs.readFileSync(p, "utf-8");
     }
 
@@ -581,6 +709,9 @@ export class AgentService {
 
       if (args.append) {
         let contentToAppend = args.content;
+        const isProtected = this.isProtectedPath(p);
+        if (isProtected) this.setFileImmutable(p, false);
+
         if (fs.existsSync(p)) {
           const currentContent = fs.readFileSync(p, "utf-8");
           if (currentContent && !currentContent.endsWith("\n")) {
@@ -588,9 +719,13 @@ export class AgentService {
           }
         }
         fs.appendFileSync(p, contentToAppend, "utf-8");
+        if (isProtected) this.setFileImmutable(p, true);
         return `Content appended to ${p}`;
       } else {
+        const isProtected = this.isProtectedPath(p);
+        if (isProtected) this.setFileImmutable(p, false);
         fs.writeFileSync(p, args.content, "utf-8");
+        if (isProtected) this.setFileImmutable(p, true);
         return `File written to ${p}`;
       }
     }
@@ -599,6 +734,9 @@ export class AgentService {
       const src = this.resolvePath(args.source);
       const dest = this.resolvePath(args.destination);
       if (!fs.existsSync(src)) return "Source file not found.";
+      if (this.isProtectedPath(src)) {
+        return `Error: Cannot move protected memory file ${src}. These files are essential for system integrity.`;
+      }
       fs.renameSync(src, dest);
       return `Moved ${src} to ${dest}`;
     }
@@ -614,6 +752,9 @@ export class AgentService {
     if (name === "delete_file") {
       const p = this.resolvePath(args.path);
       if (!fs.existsSync(p)) return "File not found.";
+      if (this.isProtectedPath(p)) {
+        return `Error: Cannot delete protected memory file ${p}. These files are essential for system integrity.`;
+      }
       fs.unlinkSync(p);
       return `Deleted ${p}`;
     }
@@ -628,7 +769,15 @@ export class AgentService {
       const p = this.resolvePath(args.path || ".");
       if (!fs.existsSync(p)) return "Directory not found.";
       const files = fs.readdirSync(p);
-      return `Files in ${p}:\n` + files.join("\n");
+      const total = files.length;
+      const limitedFiles = files.slice(0, 50);
+
+      let output =
+        `Files in ${p} (Total: ${total}):\n` + limitedFiles.join("\n");
+      if (total > 50) {
+        output += `\n... and ${total - 50} more items.`;
+      }
+      return output;
     }
 
     // --- App / Desktop Tools ---
@@ -962,9 +1111,17 @@ Format: Return ONLY the post text. No "Here is the post" preamble.`;
         }
 
         // SMART DETECTION: If the message looks like an action, force autoExecute
+        // SMART DETECTION: If the message looks like an action, force autoExecute
         let autoExecute = args.autoExecute;
         let taskPrompt = args.taskPrompt;
-        const msg = args.message.toLowerCase();
+
+        // Validation / Fallback: If message missing but taskPrompt exists, use taskPrompt as message
+        if (!args.message && taskPrompt) {
+          args.message = taskPrompt;
+        }
+
+        const msg = (args.message || "").toLowerCase();
+
         // Expanded action keywords
         const actionKeywords = [
           "fetch",

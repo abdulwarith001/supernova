@@ -6,7 +6,7 @@ import os from "os";
 import cors from "cors";
 import { Server } from "socket.io";
 import { AgentService } from "../services/agent.service";
-import { Job } from "../services/scheduler.service";
+import { Spark } from "../services/scheduler.service";
 import open from "open";
 import { decrypt } from "../utils/crypto";
 import { PROVIDERS } from "../cli/constants";
@@ -69,7 +69,7 @@ const initAgentOnStart = () => {
   }
 };
 
-const broadcastReminder = async (job: Job) => {
+const broadcastReminder = async (job: Spark) => {
   // Handle Auto-Execute Smart Tasks
   if (job.autoExecute && job.taskPrompt && agentInstance) {
     console.log(
@@ -242,10 +242,69 @@ io.on("connection", (socket: any) => {
 
 server.listen(PORT, async () => {
   console.log(`\n🚀 Supernova Server running at http://localhost:${PORT}`);
-  console.log("Opening dashboard...");
-  // await open(`http://localhost:${PORT}`);
-  // Commented out open for now to avoid popping windows in test environment, but strictly required for CLI.
-  if (process.env.NODE_ENV !== "test") {
+
+  if (process.env.DAEMON_MODE === "true") {
+    console.log("👻 Running in DAEMON MODE (Background)");
+    // Don't open browser
+  } else if (process.env.NODE_ENV !== "test") {
+    console.log("Opening dashboard...");
     import("open").then((op) => op.default(`http://localhost:${PORT}`));
   }
+});
+
+// Graceful Shutdown for Sleep Mode
+const gracefulShutdown = () => {
+  console.log("🛑 Received shutdown signal. Saving memories...");
+  if (agentInstance) {
+    if (agentInstance.session) {
+      agentInstance.session.stopLife();
+    }
+    agentInstance.destroy();
+  }
+  process.exit(0);
+};
+
+process.on("SIGINT", gracefulShutdown);
+process.on("SIGTERM", gracefulShutdown);
+
+app.get("/health", (req, res) => {
+  res.json({
+    status: "OK",
+    agent: agentInstance ? "ACTIVE" : "IDLE",
+    uptime: process.uptime(),
+    session: agentInstance?.session
+      ? agentInstance.session.getFullState()
+      : null,
+    scheduler: agentInstance?.scheduler
+      ? agentInstance.scheduler.getSummary()
+      : null,
+  });
+});
+
+// DEBUG API: Force Dream Cycle
+app.post("/api/debug/dream", async (req, res) => {
+  if (!agentInstance || !agentInstance.session) {
+    return res.status(500).json({ error: "Agent/Session not active" });
+  }
+  console.log("⚡ FORCE DREAM TRIGGERED BY DEBUG API");
+  // Manually trigger dream via private method access or we can expose a public one
+  // We didn't make dream public in SessionService, but we can call the dreamService directly if we had access.
+  // Let's modify SessionService to have a public 'forceDream' method or just access it.
+  // For now, let's cast to any to bypass privacy for debug
+  try {
+    await (agentInstance.session as any).dreamService.dream();
+    res.json({ success: true, message: "Dream cycle initiated." });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// DEBUG API: Force Stimulus
+app.post("/api/debug/stimulus", (req, res) => {
+  if (!agentInstance || !agentInstance.session) {
+    return res.status(500).json({ error: "Agent/Session not active" });
+  }
+  const { type } = req.body;
+  agentInstance.session.stimulus(type || "chat");
+  res.json({ success: true, type });
 });

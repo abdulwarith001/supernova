@@ -126,7 +126,7 @@ export class BrainService {
         messages,
         model,
         response_format: { type: "json_object" },
-        max_tokens: 2048,
+        max_tokens: 4096,
       });
 
       const choice = completion.choices[0];
@@ -134,7 +134,7 @@ export class BrainService {
 
       if (choice.finish_reason === "length") {
         throw new Error(
-          "Response truncated due to length (max_tokens). Context might be too large.",
+          "Response truncated due to length (max_tokens). The task payload might be too large for a single turn. Try breaking it down into smaller steps.",
         );
       }
 
@@ -146,19 +146,35 @@ export class BrainService {
         .replace(/\n?```$/, "")
         .trim();
 
-      return JSON.parse(content) as Thought;
+      const parsed = JSON.parse(content) as Thought;
+
+      // Schema Validation & Self-Correction
+      if (parsed.action && !parsed.action.name) {
+        throw new Error(
+          "Action validation failed: 'name' is missing from action object.",
+        );
+      }
+
+      return parsed;
     } catch (error: any) {
       console.error(`🧠 Error with ${model}:`, error.message);
 
-      // Self-Correction for JSON errors
-      if (error instanceof SyntaxError && attempt < 3 && !noRetries) {
+      // Self-Correction for JSON errors or Schema Validation errors
+      if (
+        (error instanceof SyntaxError ||
+          error.message.includes("Action validation failed")) &&
+        attempt < 3 &&
+        !noRetries
+      ) {
         console.warn(
-          "⚠️ JSON Parse Error. Retrying with a formatting reminder...",
+          `⚠️ JSON/Schema Error (${error.message}). Retrying with a formatting reminder...`,
         );
         messages.push({
           role: "system",
           content:
-            "ERROR: Your last response was invalid JSON. Please ensure your response is a raw JSON object only. No markdown formatting, no backticks, no extra text.",
+            "ERROR: " +
+            error.message +
+            " Please correct your JSON structure. Ensure 'action' has a 'name' field.",
         });
         return this.tryThink(messages, model, attempt + 1, noRetries);
       }
@@ -188,7 +204,10 @@ export class BrainService {
     }
   }
 
-  async summarize(messages: Message[]): Promise<string> {
+  async summarize(
+    messages: Message[],
+    existingSummary?: string,
+  ): Promise<string> {
     try {
       const completion = await this.openai.chat.completions.create({
         model: this.primaryModel,
@@ -197,6 +216,9 @@ export class BrainService {
             role: "system",
             content:
               "You are a master of conciseness and context prioritization. Summarize the conversation into a single, highly dense paragraph. \n\n" +
+              (existingSummary
+                ? `**EXISTING CONTEXT**: ${existingSummary}\n\nIntegrate the new messages below into this existing summary to create one unified, dense update of the conversation state.\n\n`
+                : "") +
               "**STRICT RULES**:\n" +
               "1. **Prune Stale Topics**: If a topic (e.g., questions about celebrities, past searches) is resolved or no longer the focus, omit it or condense it to a single word.\n" +
               "2. **Highlight Key Facts**: Focus on user details (name, preferences), agent identity, and current pending goals.\n" +
@@ -228,6 +250,63 @@ export class BrainService {
     } catch (error: any) {
       console.error("Summarization error:", error.message);
       return "Error generating summary.";
+    }
+  }
+
+  async extractFacts(
+    messages: Message[],
+    currentContext: { user?: string; soul?: string; identity?: string },
+  ): Promise<{
+    user_md?: string;
+    soul_md?: string;
+    identity_md?: string;
+  }> {
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: this.primaryModel,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are the memory architect for a bio-digital agent. Your goal is to integrate NEW information into EXISTING memory files.\n\n" +
+              "**EXISTING CONTENT**:\n" +
+              `USER.md: ${currentContext.user || "Empty"}\n` +
+              `SOUL.md: ${currentContext.soul || "Empty"}\n` +
+              `IDENTITY.md: ${currentContext.identity || "Empty"}\n\n` +
+              "**CRITICAL RULES**:\n" +
+              "1. **Deduplicate**: If info (like an email) is already there, do NOT add it again.\n" +
+              "2. **Ignore Transients & Tasks**: Do NOT extract one-off requests or background monitoring tasks. (e.g., 'remind me to check Afrobeats news every 2 minutes' is a TASK, not a USER trait. Do NOT save it to USER.md).\n" +
+              "3. **Merge Structure**: Keep the existing markdown headers. Update sections like 'Notes' or 'Context' within the file content provided.\n" +
+              "4. **Strict Separation**: You MUST return the full content of each file in its OWN unique JSON key. Never append SOUL content to USER_MD.\n" +
+              "5. **Format**: Return ONLY the full updated content for each file.\n\n" +
+              "Output RAW JSON ONLY:\n" +
+              '{"user_md": "Full cleaned USER.md content", "soul_md": "Full cleaned SOUL.md content", "identity_md": "Full cleaned IDENTITY.md content"}',
+          },
+          ...messages.map((m) => {
+            const msg: any = { role: m.role, content: m.content };
+            if (m.role === "function" || m.name) {
+              msg.name = (m.name || "unknown_function").replace(
+                /[^a-zA-Z0-9_-]/g,
+                "_",
+              );
+            }
+            if (m.function_call && m.function_call.name) {
+              msg.function_call = {
+                ...m.function_call,
+                name: m.function_call.name.replace(/[^a-zA-Z0-9_-]/g, "_"),
+              };
+            }
+            return msg;
+          }),
+        ],
+        response_format: { type: "json_object" },
+      });
+
+      const content = completion.choices[0].message.content || "{}";
+      return JSON.parse(content);
+    } catch (e) {
+      console.error("Fact extraction error:", e);
+      return {};
     }
   }
 }

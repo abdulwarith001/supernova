@@ -13,8 +13,9 @@ Use this skill when you need to find **current information**, **news**, or **ans
 
 - **API Key**: Ensure `SERPER_API_KEY` is available in the environment.
 - **Proactive Ritual**:
-  1. If `SERPER_API_KEY` is not in your environment, you **MUST** tell the human: _"I need a Serper API key to search the web. Please register at [serper.dev](https://serper.dev) and give me the key."_
-  2. Once they provide it, use the `update_config` tool with `isSecret: true` to save it forever.
+  1. Check the **Security & Environment** section of your system prompt. If `SERPER_API_KEY` is listed there, you can proceed and use `$SERPER_API_KEY` in your shell commands.
+  2. If it is **NOT** listed, you **MUST** tell the human: _"I need a Serper API key to search the web. Please register at [serper.dev](https://serper.dev) and give me the key."_
+  3. Once they provide it, use the `update_config` tool with `isSecret: true` to save it forever.
 - **Tool**: You must use `run_command` to execute the search via `curl`.
 
 ## Implementation Pattern

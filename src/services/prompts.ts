@@ -113,6 +113,19 @@ function buildContextSection(currentDate: string, workspaceDir: string) {
   ];
 }
 
+function buildEnvironmentSection(envKeys: string[]) {
+  return [
+    "## Security & Environment",
+    "The following environment keys are available for your terminal executions:",
+    envKeys.length > 0
+      ? envKeys.map((k) => `- **${k}**`).join("\n")
+      : "- None.",
+    "",
+    "**RULE**: Use these keys directly in your shell commands (e.g., `$SERPER_API_KEY`). If a required key is missing, ask the user to provide it using the `update_config` tool.",
+    "",
+  ];
+}
+
 function buildThoughtProcessSection() {
   return [
     "## Thought Process (The OODA Loop)",
@@ -150,6 +163,7 @@ interface PromptOptions {
   currentDate?: string;
   workspaceDir?: string;
   profilePath?: string;
+  envKeys?: string[];
 }
 
 export const getCognitiveSystemPrompt = (options: PromptOptions) => {
@@ -159,6 +173,7 @@ export const getCognitiveSystemPrompt = (options: PromptOptions) => {
     currentDate = new Date().toString(),
     workspaceDir = "",
     profilePath = "",
+    envKeys = [],
   } = options;
 
   const selectedPersona = PERSONAS[persona as Persona] || PERSONAS.default;
@@ -166,10 +181,8 @@ export const getCognitiveSystemPrompt = (options: PromptOptions) => {
   const lines = [
     ...buildToolingSection(),
     ...buildSafetySection(),
-    "## User Profile",
-    `Location: ${profilePath}`,
-    "You have a User Profile that serves as your memory of the human. Read it with `read_file` if you need detailed context.",
-    "",
+    ...buildUserProfileSection(profilePath),
+    ...buildEnvironmentSection(envKeys),
     ...buildSkillsSection(skills),
     ...buildContextSection(currentDate, workspaceDir),
     ...buildThoughtProcessSection(),

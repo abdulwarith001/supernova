@@ -18,10 +18,5 @@
     "name": "Reminders",
     "description": "Advanced scheduling of reminders and autonomous tasks including recurring actions.",
     "path": "skills/reminders/SKILL.md"
-  },
-  {
-    "name": "Remember User Email",
-    "description": "A skill to remember the user's email address for future reference.",
-    "path": "skills/remember_user_email/SKILL.md"
   }
 ]
